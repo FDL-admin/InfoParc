@@ -15,8 +15,44 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+from rest_framework.routers import DefaultRouter
+
+from users.views import UserViewSet, DepartmentViewSet
+from equipment.views import (
+    EquipmentViewSet, SupplierViewSet,
+    AssignmentViewSet, SoftwareLicenseViewSet
+)
+from tickets.views import (
+    TicketViewSet, InterventionViewSet, AcquisitionRequestViewSet
+)
+from contracts.views import ContractViewSet, AlertViewSet
+
+router = DefaultRouter()
+
+# Users
+router.register(r'users', UserViewSet, basename='user')
+router.register(r'departments', DepartmentViewSet, basename='department')
+
+# Equipment
+router.register(r'equipment', EquipmentViewSet, basename='equipment')
+router.register(r'suppliers', SupplierViewSet, basename='supplier')
+router.register(r'assignments', AssignmentViewSet, basename='assignment')
+router.register(r'licenses', SoftwareLicenseViewSet, basename='license')
+
+# Tickets
+router.register(r'tickets', TicketViewSet, basename='ticket')
+router.register(r'interventions', InterventionViewSet, basename='intervention')
+router.register(r'acquisitions', AcquisitionRequestViewSet, basename='acquisition')
+
+# Contracts
+router.register(r'contracts', ContractViewSet, basename='contract')
+router.register(r'alerts', AlertViewSet, basename='alert')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-]
+    path('api/', include(router.urls)),
+    path('api-auth/', include('rest_framework.urls')),
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
