@@ -32,6 +32,8 @@ from tickets.views import (
 )
 from contracts.views import ContractViewSet, AlertViewSet
 
+from django.urls import path, include
+
 router = DefaultRouter()
 
 # Users
@@ -54,9 +56,10 @@ router.register(r'contracts', ContractViewSet, basename='contract')
 router.register(r'alerts', AlertViewSet, basename='alert')
 
 urlpatterns = [
+    path('', include('core.urls')),
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
     path('api/auth/token/', CustomTokenObtainPairView.as_view(), name='token_obtain'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('api/dashboard/', DashboardView.as_view(), name='dashboard'),
+    path('api/dashboard/', DashboardView.as_view(), name='api_dashboard'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

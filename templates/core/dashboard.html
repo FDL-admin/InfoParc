@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard — BUMIGEB{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="fw-bold mb-0">Dashboard</h4>
+        <small class="text-muted">Vue d'ensemble du parc informatique</small>
+    </div>
+</div>
+
+<!-- Stats cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card blue p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <small class="text-muted">Total équipements</small>
+                    <h3 class="fw-bold mb-0">{{ stats.equipment.total }}</h3>
+                </div>
+                <i class="bi bi-pc-display fs-2 text-primary opacity-50"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card green p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <small class="text-muted">Tickets ouverts</small>
+                    <h3 class="fw-bold mb-0">{{ stats.tickets.open }}</h3>
+                </div>
+                <i class="bi bi-ticket fs-2 text-success opacity-50"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card orange p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <small class="text-muted">Contrats expirant</small>
+                    <h3 class="fw-bold mb-0">{{ stats.contracts.expiring_soon }}</h3>
+                </div>
+                <i class="bi bi-file-earmark-text fs-2 text-warning opacity-50"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card red p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <small class="text-muted">Satisfaction moy.</small>
+                    <h3 class="fw-bold mb-0">
+                        {% if stats.satisfaction.average %}
+                            {{ stats.satisfaction.average }}/5
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </h3>
+                </div>
+                <i class="bi bi-star fs-2 text-danger opacity-50"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Derniers tickets ouverts -->
+<div class="card">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-bold">Derniers tickets ouverts</h6>
+        <a href="{% url 'ticket_list' %}" class="btn btn-sm btn-outline-primary">Voir tous</a>
+    </div>
+    <div class="card-body p-0">
+        {% if stats.tickets.latest_open %}
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>Titre</th>
+                    <th>Demandeur</th>
+                    <th>Priorité</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ticket in stats.tickets.latest_open %}
+                <tr>
+                    <td><small class="text-muted">{{ ticket.id }}</small></td>
+                    <td>{{ ticket.title }}</td>
+                    <td>{{ ticket.requester_name }}</td>
+                    <td>
+                        <span class="badge badge-{{ ticket.priority }}">
+                            {{ ticket.priority }}
+                        </span>
+                    </td>
+                    <td><small class="text-muted">{{ ticket.created_at|date:"d/m/Y" }}</small></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-4 text-muted">
+            <i class="bi bi-check-circle fs-3"></i>
+            <p class="mt-2 mb-0">Aucun ticket ouvert</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

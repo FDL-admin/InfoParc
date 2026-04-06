@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}BUMIGEB — Gestion Parc Informatique{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8fafc; }
+        .sidebar {
+            min-height: 100vh;
+            background-color: #1e3a5f;
+            width: 240px;
+            position: fixed;
+            top: 0; left: 0;
+        }
+        .sidebar .nav-link {
+            color: #a8c4e0;
+            padding: 10px 20px;
+            border-radius: 6px;
+            margin: 2px 8px;
+        }
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            background-color: #2d5a8e;
+            color: #ffffff;
+        }
+        .sidebar .nav-link i { margin-right: 8px; }
+        .main-content { margin-left: 240px; padding: 24px; }
+        .sidebar-brand {
+            padding: 20px;
+            border-bottom: 1px solid #2d5a8e;
+        }
+        .sidebar-brand h6 { color: #ffffff; margin: 0; font-size: 13px; }
+        .sidebar-brand small { color: #a8c4e0; font-size: 11px; }
+        .card { border: none; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-radius: 10px; }
+        .stat-card { border-left: 4px solid; }
+        .stat-card.blue { border-color: #0ea5e9; }
+        .stat-card.green { border-color: #22c55e; }
+        .stat-card.orange { border-color: #f59e0b; }
+        .stat-card.red { border-color: #ef4444; }
+        .badge-open { background-color: #dbeafe; color: #1d4ed8; }
+        .badge-assigned { background-color: #fef9c3; color: #854d0e; }
+        .badge-in_progress { background-color: #dcfce7; color: #166534; }
+        .badge-resolved { background-color: #f0fdf4; color: #15803d; }
+        .badge-closed { background-color: #f1f5f9; color: #475569; }
+        .badge-critical { background-color: #fee2e2; color: #991b1b; }
+        .badge-high { background-color: #ffedd5; color: #9a3412; }
+        .badge-normal { background-color: #dbeafe; color: #1e40af; }
+        .badge-low { background-color: #f1f5f9; color: #475569; }
+    </style>
+</head>
+<body>
+{% if user.is_authenticated %}
+<!-- Sidebar -->
+<div class="sidebar d-flex flex-column">
+    <div class="sidebar-brand">
+        <h6><i class="bi bi-pc-display"></i> BUMIGEB</h6>
+        <small>Gestion Parc Informatique</small>
+    </div>
+    <nav class="nav flex-column mt-3 flex-grow-1">
+        {% if user.is_admin %}
+        <a href="{% url 'core_dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+            <i class="bi bi-speedometer2"></i> Dashboard
+        </a>
+        <a href="{% url 'equipment_list' %}" class="nav-link {% if request.resolver_match.url_name == 'equipment_list' %}active{% endif %}">
+            <i class="bi bi-pc-display"></i> Équipements
+        </a>
+        {% endif %}
+        <a href="{% url 'ticket_list' %}" class="nav-link {% if request.resolver_match.url_name == 'ticket_list' %}active{% endif %}">
+            <i class="bi bi-ticket"></i> Mes tickets
+        </a>
+        <a href="{% url 'ticket_create' %}" class="nav-link {% if request.resolver_match.url_name == 'ticket_create' %}active{% endif %}">
+            <i class="bi bi-plus-circle"></i> Nouvelle demande
+        </a>
+    </nav>
+    <div class="p-3 border-top" style="border-color: #2d5a8e !important;">
+        <small class="text-white">{{ user.first_name }} {{ user.last_name }}</small><br>
+        <small style="color: #a8c4e0;">{{ user.get_role_display }}</small><br>
+        <a href="{% url 'logout' %}" class="btn btn-sm btn-outline-light mt-2 w-100">
+            <i class="bi bi-box-arrow-right"></i> Déconnexion
+        </a>
+    </div>
+</div>
+<!-- Main content -->
+<div class="main-content">
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    {% endif %}
+    {% block content %}{% endblock %}
+</div>
+{% else %}
+    {% block auth_content %}{% endblock %}
+{% endif %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
