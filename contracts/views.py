@@ -4,6 +4,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter, OrderingFilter
+
 from .models import Contract, Alert
 from .serializers import (
     ContractSerializer, ContractListSerializer, AlertSerializer
@@ -15,6 +18,12 @@ class ContractViewSet(viewsets.ModelViewSet):
     queryset = Contract.objects.select_related(
         'equipment', 'supplier'
     ).prefetch_related('alerts').all()
+    
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['type', 'status']
+    search_fields = ['name', 'reference']
+    ordering_fields = ['end_date', 'start_date']
+    ordering = ['end_date']
 
     def get_permissions(self):
         if self.action in ('create', 'update', 'partial_update', 'destroy'):

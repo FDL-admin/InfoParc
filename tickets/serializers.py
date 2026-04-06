@@ -20,7 +20,7 @@ class InterventionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Intervention
         fields = '__all__'
-        read_only_fields = ['date']
+        read_only_fields = ['date', 'ticket', 'technician']
 
 
 class TicketSerializer(serializers.ModelSerializer):
@@ -33,7 +33,7 @@ class TicketSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ticket
         fields = '__all__'
-        read_only_fields = ['created_at', 'updated_at', 'requester']
+        read_only_fields = ['created_at', 'updated_at', 'requester', 'ticket_number']
 
     def create(self, validated_data):
         # Le requester est toujours l'utilisateur connecté
@@ -50,7 +50,7 @@ class TicketListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ticket
         fields = [
-            'id', 'title', 'status', 'priority', 'category',
+            'id', 'ticket_number', 'title', 'status', 'priority', 'category',
             'requester_name', 'assigned_to_name', 'equipment_name',
             'created_at', 'resolved_at'
         ]

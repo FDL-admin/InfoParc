@@ -35,6 +35,7 @@ class Ticket(models.Model):
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='normal')
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='open')
+    ticket_number = models.CharField(max_length=20, unique=False, blank=True)
 
     # Relations
     equipment = models.ForeignKey(
@@ -63,6 +64,16 @@ class Ticket(models.Model):
 
     def __str__(self):
         return f"#{self.id} — {self.title} [{self.status}]"
+    
+    def save(self, *args, **kwargs):
+        if not self.ticket_number:
+            from django.utils import timezone
+            year = timezone.now().year
+            count = Ticket.objects.filter(
+                created_at__year=year
+            ).count() + 1
+            self.ticket_number = f"TK-{year}-{str(count).zfill(4)}"
+        super().save(*args, **kwargs)
 
     class Meta:
         verbose_name = "Ticket"

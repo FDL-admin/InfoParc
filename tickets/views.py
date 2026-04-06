@@ -4,19 +4,27 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter, OrderingFilter
+
 from .models import Ticket, Intervention, Evaluation, AcquisitionRequest
 from .serializers import (
     TicketSerializer, TicketListSerializer,
     TicketStatusUpdateSerializer, InterventionSerializer,
     EvaluationSerializer, AcquisitionRequestSerializer
 )
-from users.permissions import IsAdminOrSuperAdmin, IsOwnerOrAdmin, IsSuperAdmin
-
+from users.permissions import IsAdminOrSuperAdmin, IsOwnerOrAdmin, IsSuperAdmin   
 
 class TicketViewSet(viewsets.ModelViewSet):
     queryset = Ticket.objects.select_related(
         'requester', 'assigned_to', 'equipment'
     ).prefetch_related('interventions', 'evaluation').all()
+    
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['status', 'priority', 'category', 'assigned_to']
+    search_fields = ['title', 'description', 'ticket_number']
+    ordering_fields = ['created_at', 'priority', 'status']
+    ordering = ['-created_at']
 
     def get_permissions(self):
         if self.action == 'destroy':
@@ -100,6 +108,42 @@ class TicketViewSet(viewsets.ModelViewSet):
             serializer.save(ticket=ticket)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminOrSuperAdmin])
+    def add_intervention(self, request, pk=None):
+        """Ajouter une intervention sur un ticket"""
+        ticket = self.get_object()
+
+        if ticket.status not in ('assigned', 'in_progress', 'waiting'):
+            return Response(
+                {'detail': 'Le ticket doit être assigné ou en cours pour ajouter une intervention.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = InterventionSerializer(data=request.data)
+        if serializer.is_valid():
+            # Passe automatiquement le ticket et le technicien
+            serializer.save(
+                ticket=ticket,
+                technician=request.user
+            )
+            # Met le ticket en cours automatiquement
+            if ticket.status == 'assigned':
+                ticket.status = 'in_progress'
+                ticket.save()
+
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    def interventions(self, request, pk=None):
+        """Liste des interventions d'un ticket"""
+        ticket = self.get_object()
+        interventions = ticket.interventions.select_related(
+            'technician', 'provider'
+        ).order_by('-date')
+        serializer = InterventionSerializer(interventions, many=True)
+        return Response(serializer.data)
 
 
 class InterventionViewSet(viewsets.ModelViewSet):

@@ -4,6 +4,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter, OrderingFilter
+
 from .models import Equipment, Supplier, Assignment, SoftwareLicense
 from .serializers import (
     EquipmentSerializer, EquipmentListSerializer,
@@ -17,6 +20,12 @@ class EquipmentViewSet(viewsets.ModelViewSet):
     queryset = Equipment.objects.select_related(
         'department', 'assigned_to', 'supplier'
     ).all()
+    
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['type', 'status', 'site', 'department', 'is_laptop']
+    search_fields = ['name', 'serial_number', 'brand', 'model']
+    ordering_fields = ['name', 'created_at', 'purchase_date']
+    ordering = ['-created_at']
 
     def get_permissions(self):
         if self.action in ('create', 'update', 'partial_update', 'destroy'):
