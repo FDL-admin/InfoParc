@@ -10,7 +10,7 @@ class EvaluationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Evaluation
         fields = '__all__'
-        read_only_fields = ['created_at']
+        read_only_fields = ['created_at', 'ticket']
 
 
 class InterventionSerializer(serializers.ModelSerializer):

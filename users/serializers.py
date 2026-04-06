@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from .models import User, Department
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
@@ -73,3 +75,18 @@ class ChangePasswordSerializer(serializers.Serializer):
         if not user.check_password(value):
             raise serializers.ValidationError("Ancien mot de passe incorrect.")
         return value
+    
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+
+        # Champs custom dans le token
+        token['role'] = user.role
+        token['full_name'] = f"{user.first_name} {user.last_name}"
+        token['email'] = user.email
+        token['department'] = user.department.sigle if user.department else None
+
+        return token

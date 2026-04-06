@@ -19,6 +19,8 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
+from rest_framework_simplejwt.views import TokenRefreshView
+from users.views import CustomTokenObtainPairView, DashboardView
 
 from users.views import UserViewSet, DepartmentViewSet
 from equipment.views import (
@@ -54,5 +56,7 @@ router.register(r'alerts', AlertViewSet, basename='alert')
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
-    path('api-auth/', include('rest_framework.urls')),
+    path('api/auth/token/', CustomTokenObtainPairView.as_view(), name='token_obtain'),
+    path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/dashboard/', DashboardView.as_view(), name='dashboard'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
