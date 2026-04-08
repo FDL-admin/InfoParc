@@ -49,6 +49,11 @@ class TicketViewSet(viewsets.ModelViewSet):
         # User standard ne voit que ses propres tickets
         if user.role == 'user':
             queryset = queryset.filter(requester=user)
+            
+        # Par défaut, on masque les archivés
+        show_archived = self.request.query_params.get('archived', 'false')
+        if show_archived.lower() != 'true':
+            queryset = queryset.filter(is_archived=False)
 
         # Filtres
         status_ = self.request.query_params.get('status')
@@ -144,6 +149,54 @@ class TicketViewSet(viewsets.ModelViewSet):
         ).order_by('-date')
         serializer = InterventionSerializer(interventions, many=True)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminOrSuperAdmin])
+    def close(self, request, pk=None):
+        ticket = self.get_object()
+
+        # Règle métier : on ne peut clôturer que depuis "resolved"
+        if ticket.status != 'resolved':
+            return Response(
+                {'detail': 'Le ticket doit être résolu avant d\'être clôturé.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if ticket.status == 'closed':
+            return Response(
+                {'detail': 'Ce ticket est déjà clôturé.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        ticket.status = 'closed'
+        ticket.closed_at = timezone.now()
+        ticket.closed_by = request.user
+        ticket.save()
+
+        return Response({'detail': 'Ticket clôturé avec succès.'})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminOrSuperAdmin])
+    def archive(self, request, pk=None):
+        ticket = self.get_object()
+
+        # Règle métier : on ne peut archiver que depuis "closed"
+        if ticket.status != 'closed':
+            return Response(
+                {'detail': 'Le ticket doit être clôturé avant d\'être archivé.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if ticket.is_archived:
+            return Response(
+                {'detail': 'Ce ticket est déjà archivé.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        ticket.is_archived = True
+        ticket.archived_at = timezone.now()
+        ticket.archived_by = request.user
+        ticket.save()
+
+        return Response({'detail': 'Ticket archivé avec succès.'})
 
 
 class InterventionViewSet(viewsets.ModelViewSet):

@@ -1,6 +1,7 @@
 from django.db import models
 from users.models import User
 from equipment.models import Equipment, Supplier
+from django.conf import settings
 
 
 class Ticket(models.Model):
@@ -60,7 +61,25 @@ class Ticket(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
+    
+    # Clôture
     closed_at = models.DateTimeField(null=True, blank=True)
+    closed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='closed_tickets'
+    )
+
+    # Archivage
+    is_archived = models.BooleanField(default=False)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='archived_tickets'
+    )
 
     def __str__(self):
         return f"#{self.id} — {self.title} [{self.status}]"
