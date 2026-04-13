@@ -41,6 +41,11 @@ class Equipment(models.Model):
         max_digits=12, decimal_places=2,
         null=True, blank=True
     )
+    
+    # Après purchase_price
+    warranty_end_date = models.DateField(null=True, blank=True)
+    lifespan_years = models.PositiveSmallIntegerField(null=True, blank=True)
+    
     supplier = models.ForeignKey(
         'Supplier',
         on_delete=models.SET_NULL,

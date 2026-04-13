@@ -32,7 +32,8 @@ class EquipmentListSerializer(serializers.ModelSerializer):
             'id', 'name', 'type', 'brand', 'model',
             'serial_number', 'status', 'site',
             'assigned_to_name', 'department_name',
-            'is_laptop', 'created_at'
+            'is_laptop', 'created_at',
+            'warranty_end_date', 'lifespan_years',
         ]
 
     def get_assigned_to_name(self, obj):
@@ -41,7 +42,7 @@ class EquipmentListSerializer(serializers.ModelSerializer):
         return None
 
     def get_department_name(self, obj):
-        return obj.department.sigle if obj.department else None
+        return obj.department.name if obj.department else None
 
 
 class AssignmentSerializer(serializers.ModelSerializer):
