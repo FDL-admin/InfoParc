@@ -22,7 +22,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 from users.views import CustomTokenObtainPairView, DashboardView
 
-from users.views import UserViewSet, DepartmentViewSet
+from users.views import UserViewSet, DepartmentViewSet, DepartmentStatsView
 from equipment.views import (
     EquipmentViewSet, SupplierViewSet,
     AssignmentViewSet, SoftwareLicenseViewSet
@@ -58,8 +58,14 @@ router.register(r'alerts', AlertViewSet, basename='alert')
 urlpatterns = [
     path('', include('core.urls')),
     path('admin/', admin.site.urls),
-    path('api/', include(router.urls)),
+
+    # Routes spécifiques D'ABORD — avant le router
     path('api/auth/token/', CustomTokenObtainPairView.as_view(), name='token_obtain'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/dashboard/', DashboardView.as_view(), name='api_dashboard'),
+    path('api/departments/stats/', DepartmentStatsView.as_view(), name='department-stats'),
+
+    # Le router EN DERNIER — il est le "catch-all" de /api/
+    path('api/', include(router.urls)),
+
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

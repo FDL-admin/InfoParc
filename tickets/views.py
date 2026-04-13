@@ -9,9 +9,14 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 
 from .models import Ticket, Intervention, Evaluation, AcquisitionRequest
 from .serializers import (
-    TicketSerializer, TicketListSerializer,
-    TicketStatusUpdateSerializer, InterventionSerializer,
-    EvaluationSerializer, AcquisitionRequestSerializer
+    TicketReadSerializer,
+    TicketWriteSerializer,
+    TicketListSerializer,
+    TicketStatusUpdateSerializer,
+    InterventionReadSerializer,
+    InterventionWriteSerializer,
+    EvaluationSerializer,
+    AcquisitionRequestSerializer,
 )
 from users.permissions import IsAdminOrSuperAdmin, IsOwnerOrAdmin, IsSuperAdmin   
 
@@ -38,7 +43,9 @@ class TicketViewSet(viewsets.ModelViewSet):
             return TicketListSerializer
         if self.action == 'update_status':
             return TicketStatusUpdateSerializer
-        return TicketSerializer
+        if self.action in ('create', 'update', 'partial_update'):
+            return TicketWriteSerializer
+        return TicketReadSerializer
 
     def get_queryset(self):
         user = self.request.user
@@ -81,8 +88,6 @@ class TicketViewSet(viewsets.ModelViewSet):
             # Horodatage automatique
             if new_status == 'resolved':
                 ticket.resolved_at = timezone.now()
-            if new_status == 'closed':
-                ticket.closed_at = timezone.now()
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -116,7 +121,6 @@ class TicketViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'], permission_classes=[IsAdminOrSuperAdmin])
     def add_intervention(self, request, pk=None):
-        """Ajouter une intervention sur un ticket"""
         ticket = self.get_object()
 
         if ticket.status not in ('assigned', 'in_progress', 'waiting'):
@@ -125,29 +129,29 @@ class TicketViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        serializer = InterventionSerializer(data=request.data)
+        serializer = InterventionWriteSerializer(
+            data=request.data,
+            context={'request': request}
+        )
         if serializer.is_valid():
-            # Passe automatiquement le ticket et le technicien
-            serializer.save(
-                ticket=ticket,
-                technician=request.user
-            )
-            # Met le ticket en cours automatiquement
+            serializer.save(ticket=ticket, technician=request.user)
             if ticket.status == 'assigned':
                 ticket.status = 'in_progress'
                 ticket.save()
-
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            # Retourne la réponse enrichie
+            return Response(
+                InterventionReadSerializer(serializer.instance).data,
+                status=status.HTTP_201_CREATED
+            )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
     def interventions(self, request, pk=None):
-        """Liste des interventions d'un ticket"""
         ticket = self.get_object()
         interventions = ticket.interventions.select_related(
             'technician', 'provider'
         ).order_by('-date')
-        serializer = InterventionSerializer(interventions, many=True)
+        serializer = InterventionReadSerializer(interventions, many=True)
         return Response(serializer.data)
     
     @action(detail=True, methods=['post'], permission_classes=[IsAdminOrSuperAdmin])
@@ -203,8 +207,12 @@ class InterventionViewSet(viewsets.ModelViewSet):
     queryset = Intervention.objects.select_related(
         'ticket', 'technician', 'provider'
     ).all()
-    serializer_class = InterventionSerializer
     permission_classes = [IsAdminOrSuperAdmin]
+
+    def get_serializer_class(self):
+        if self.action in ('create', 'update', 'partial_update'):
+            return InterventionWriteSerializer
+        return InterventionReadSerializer
 
     def get_queryset(self):
         queryset = super().get_queryset()

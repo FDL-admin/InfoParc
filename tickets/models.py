@@ -37,6 +37,8 @@ class Ticket(models.Model):
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='normal')
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='open')
     ticket_number = models.CharField(max_length=20, unique=False, blank=True)
+    observations = models.TextField(blank=True)
+
 
     # Relations
     equipment = models.ForeignKey(
@@ -123,7 +125,12 @@ class Intervention(models.Model):
     description = models.TextField()
     date = models.DateTimeField(auto_now_add=True)
     duration_minutes = models.PositiveIntegerField(null=True, blank=True)
-
+    
+    # DI BUMIGEB
+    materials_provided = models.TextField(blank=True)
+    end_time = models.DateTimeField(null=True, blank=True)
+    purchase_order_number = models.CharField(max_length=50, blank=True)
+    
     # Facturation
     invoice = models.FileField(
         upload_to='invoices/',

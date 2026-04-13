@@ -7,7 +7,10 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import CustomTokenObtainPairSerializer
 
 from rest_framework.views import APIView
-from django.db.models import Count, Avg, Sum
+from django.db.models import (
+    Count, Avg, Sum, F, ExpressionWrapper,
+    DurationField, Q
+)
 from equipment.models import Equipment
 from tickets.models import Ticket, Evaluation
 from contracts.models import Contract
@@ -180,3 +183,114 @@ class DashboardView(APIView):
                 'expiring_soon': expiring_contracts,
             },
         })
+        
+class DepartmentStatsView(APIView):
+    """
+    Stats complètes par département — admin/superadmin uniquement.
+    GET /api/departments/stats/
+    GET /api/departments/stats/?department_id=3  → un seul département
+    """
+    permission_classes = [IsAdminOrSuperAdmin]
+
+    def get(self, request):
+        # Filtre optionnel sur un département précis
+        department_id = request.query_params.get('department_id')
+
+        # On part des départements, pas des tickets — pour inclure
+        # les départements à 0 ticket (important pour un vrai inventaire)
+        from users.models import Department
+        departments = Department.objects.all()
+        if department_id:
+            departments = departments.filter(id=department_id)
+
+        result = []
+
+        for dept in departments:
+            # --- Équipements ---
+            equip_qs = Equipment.objects.filter(department=dept)
+            equip_total = equip_qs.count()
+
+            # Répartition par type en un seul hit DB
+            equip_by_type = dict(
+                equip_qs.values('type')
+                         .annotate(n=Count('id'))
+                         .values_list('type', 'n')
+            )
+
+            # Répartition par statut
+            equip_by_status = dict(
+                equip_qs.values('status')
+                         .annotate(n=Count('id'))
+                         .values_list('status', 'n')
+            )
+
+            # --- Tickets ---
+            ticket_qs = Ticket.objects.filter(
+                requester__department=dept,
+                is_archived=False  # on exclut les archivés des stats courantes
+            )
+            ticket_total = ticket_qs.count()
+
+            # Répartition par statut
+            ticket_by_status = dict(
+                ticket_qs.values('status')
+                          .annotate(n=Count('id'))
+                          .values_list('status', 'n')
+            )
+
+            # Tickets ouverts = tout sauf resolved et closed
+            tickets_open = ticket_qs.exclude(
+                status__in=['resolved', 'closed']
+            ).count()
+
+            # --- Temps moyen de résolution (calcul 100% DB) ---
+            # On ne prend que les tickets qui ont un resolved_at
+            avg_resolution = ticket_qs.filter(
+                resolved_at__isnull=False
+            ).annotate(
+                duration=ExpressionWrapper(
+                    F('resolved_at') - F('created_at'),
+                    output_field=DurationField()
+                )
+            ).aggregate(avg=Avg('duration'))['avg']
+
+            # Conversion en heures, arrondi 1 décimale — None si aucun résolu
+            avg_resolution_hours = None
+            if avg_resolution is not None:
+                avg_resolution_hours = round(
+                    avg_resolution.total_seconds() / 3600, 1
+                )
+
+            # --- Taux de résolution ---
+            # (résolus + clos) / total * 100
+            tickets_resolved_or_closed = ticket_qs.filter(
+                status__in=['resolved', 'closed']
+            ).count()
+
+            resolution_rate = None
+            if ticket_total > 0:
+                resolution_rate = round(
+                    (tickets_resolved_or_closed / ticket_total) * 100, 1
+                )
+
+            result.append({
+                'department': {
+                    'id': dept.id,
+                    'name': dept.name,
+                    'site': dept.site,
+                },
+                'equipment': {
+                    'total': equip_total,
+                    'by_type': equip_by_type,
+                    'by_status': equip_by_status,
+                },
+                'tickets': {
+                    'total': ticket_total,
+                    'open': tickets_open,
+                    'by_status': ticket_by_status,
+                    'resolution_rate_pct': resolution_rate,
+                    'avg_resolution_hours': avg_resolution_hours,
+                },
+            })
+
+        return Response(result)

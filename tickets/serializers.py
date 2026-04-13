@@ -12,33 +12,115 @@ class EvaluationSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['created_at', 'ticket']
 
+    
+class InterventionWriteSerializer(serializers.ModelSerializer):
+    """Utilisé pour POST/PATCH — champs éditables uniquement"""
+    class Meta:
+        model = Intervention
+        fields = [
+            'provider',
+            'description',
+            'duration_minutes',
+            'invoice',
+            'amount',
+            'is_paid',
+            'materials_provided',
+            'end_time',
+            'purchase_order_number',
+        ]
+        # ticket et technician injectés automatiquement dans la vue
+        
+    def validate(self, attrs):
+        # end_time ne peut pas être avant date de création
+        end_time = attrs.get('end_time')
+        if end_time and self.instance and end_time < self.instance.date:
+            raise serializers.ValidationError({
+                'end_time': 'La fin d\'intervention ne peut pas précéder son début.'
+            })
+        return attrs
 
-class InterventionSerializer(serializers.ModelSerializer):
+
+class InterventionReadSerializer(serializers.ModelSerializer):
+    """Utilisé pour GET — données enrichies pour React"""
     technician_detail = UserSerializer(source='technician', read_only=True)
     provider_detail = SupplierSerializer(source='provider', read_only=True)
 
     class Meta:
         model = Intervention
-        fields = '__all__'
-        read_only_fields = ['date', 'ticket', 'technician']
+        fields = [
+            'id',
+            'ticket',
+            'technician',
+            'technician_detail',
+            'provider',
+            'provider_detail',
+            'description',
+            'date',
+            'duration_minutes',
+            'invoice',
+            'amount',
+            'is_paid',
+            'materials_provided',
+            'end_time',
+            'purchase_order_number',
+        ]
 
 
-class TicketSerializer(serializers.ModelSerializer):
+class TicketWriteSerializer(serializers.ModelSerializer):
+    """Utilisé pour POST/PATCH"""
+    class Meta:
+        model = Ticket
+        fields = [
+            'title',
+            'description',
+            'observations',
+            'category',
+            'priority',
+            'equipment',
+            'assigned_to',
+        ]
+
+    def create(self, validated_data):
+        validated_data['requester'] = self.context['request'].user
+        return super().create(validated_data)
+
+
+class TicketReadSerializer(serializers.ModelSerializer):
+    """Utilisé pour GET — données enrichies pour React"""
     requester_detail = UserSerializer(source='requester', read_only=True)
     assigned_to_detail = UserSerializer(source='assigned_to', read_only=True)
     equipment_detail = EquipmentListSerializer(source='equipment', read_only=True)
-    interventions = InterventionSerializer(many=True, read_only=True)
+    interventions = InterventionReadSerializer(many=True, read_only=True)
     evaluation = EvaluationSerializer(read_only=True)
 
     class Meta:
         model = Ticket
-        fields = '__all__'
-        read_only_fields = ['created_at', 'updated_at', 'requester', 'ticket_number']
-
-    def create(self, validated_data):
-        # Le requester est toujours l'utilisateur connecté
-        validated_data['requester'] = self.context['request'].user
-        return super().create(validated_data)
+        fields = [
+            'id',
+            'ticket_number',
+            'title',
+            'description',
+            'observations',
+            'category',
+            'priority',
+            'status',
+            'equipment',
+            'equipment_detail',
+            'requester',
+            'requester_detail',
+            'assigned_to',
+            'assigned_to_detail',
+            'interventions',
+            'evaluation',
+            'created_at',
+            'updated_at',
+            'resolved_at',
+            'closed_at',
+            'closed_by',
+            'is_archived',
+            'archived_at',
+            'archived_by',
+        ]
 
 
 class TicketListSerializer(serializers.ModelSerializer):
