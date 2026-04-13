@@ -15,6 +15,7 @@ from .serializers import (
 )
 from users.permissions import IsAdminOrSuperAdmin, IsSuperAdmin
 
+import nmap
 
 class EquipmentViewSet(viewsets.ModelViewSet):
     queryset = Equipment.objects.select_related(
@@ -28,7 +29,7 @@ class EquipmentViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
 
     def get_permissions(self):
-        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+        if self.action in ('create', 'update', 'partial_update', 'destroy', 'discover'):
             return [IsAdminOrSuperAdmin()]
         return [IsAuthenticated()]
 
@@ -106,6 +107,91 @@ class EquipmentViewSet(viewsets.ModelViewSet):
         ).select_related('user').order_by('-date_start')
         serializer = AssignmentSerializer(assignments, many=True)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['post'], permission_classes=[IsAdminOrSuperAdmin])
+    def discover(self, request):
+        """
+        Scan réseau et création automatique des machines détectées.
+        POST /api/equipment/discover/
+        Body optionnel : {"network": "192.168.11.0/24"}
+        """
+        # Plage réseau — paramétrable, défaut = réseau BUMIGEB
+        network = request.data.get('network', '192.168.11.0/24')
+
+        try:
+            nm = nmap.PortScanner()
+            # -sn = ping scan uniquement (pas de scan de ports)
+            # -T4 = vitesse agressive mais raisonnable
+            # --host-timeout 2s = on n'attend pas les machines mortes
+            nm.scan(hosts=network, arguments='-sn -T4 --host-timeout 2s')
+        except nmap.PortScannerError as e:
+            return Response(
+                {'detail': f'Erreur scanner : {str(e)}. nmap est-il installé ?'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        except Exception as e:
+            return Response(
+                {'detail': f'Erreur inattendue : {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        created = []    # machines nouvellement ajoutées
+        skipped = []    # machines déjà en base
+
+        for host in nm.all_hosts():
+            # Récupère le hostname — fallback sur l'IP si vide
+            hostname = nm[host].hostname() or f"machine-{host.replace('.', '-')}"
+
+            # Récupère l'adresse MAC si disponible (pas toujours accessible)
+            mac = None
+            if 'mac' in nm[host]['addresses']:
+                mac = nm[host]['addresses']['mac']
+
+            # Vérification doublon : par MAC d'abord, puis par hostname
+            if mac and Equipment.objects.filter(serial_number=mac).exists():
+                skipped.append({
+                    'ip': host,
+                    'hostname': hostname,
+                    'reason': 'Déjà enregistrée (MAC connue)'
+                })
+                continue
+            
+            if Equipment.objects.filter(name=hostname, type='desktop').exists():
+                skipped.append({
+                    'ip': host,
+                    'hostname': hostname,
+                    'reason': 'Déjà enregistrée (hostname connu)'
+                })
+                continue
+
+            # Crée l'équipement en brouillon — MAC dans serial_number, IP dans location
+            equipment = Equipment.objects.create(
+                name=hostname,
+                type='desktop',       # Windows → desktop par défaut
+                status='stock',       # brouillon — à compléter
+                location=host,        # IP dans le champ location
+                site='bobo',          # site par défaut BUMIGEB Bobo
+                serial_number=mac,
+                # brand, model, department — à compléter par l'admin
+            )
+
+            created.append({
+                'id': equipment.id,
+                'ip': host,
+                'hostname': hostname,
+                'mac': mac,
+            })
+
+        return Response({
+            'summary': {
+                'scanned': network,
+                'hosts_found': len(nm.all_hosts()),
+                'created': len(created),
+                'skipped': len(skipped),
+            },
+            'created': created,
+            'skipped': skipped,
+        }, status=status.HTTP_201_CREATED)
 
 
 class SupplierViewSet(viewsets.ModelViewSet):
