@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+:root {
+  --green-primary: #1B5E20;
+  --green-light: #2E7D32;
+  --green-hover: #388E3C;
+  --pink-primary: #C2185B;
+  --pink-light: #E91E8C;
+}

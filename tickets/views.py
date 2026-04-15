@@ -18,7 +18,8 @@ from .serializers import (
     EvaluationSerializer,
     AcquisitionRequestSerializer,
 )
-from users.permissions import IsAdminOrSuperAdmin, IsOwnerOrAdmin, IsSuperAdmin   
+from users.permissions import IsAdminOrSuperAdmin, IsOwnerOrAdmin, IsSuperAdmin
+from .emails import send_ticket_created, send_ticket_assigned, send_ticket_resolved, send_ticket_closed
 
 class TicketViewSet(viewsets.ModelViewSet):
     queryset = Ticket.objects.select_related(
@@ -37,6 +38,10 @@ class TicketViewSet(viewsets.ModelViewSet):
         if self.action in ('update', 'partial_update', 'update_status'):
             return [IsAdminOrSuperAdmin()]
         return [IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        ticket = serializer.save(requester=self.request.user)
+        send_ticket_created(ticket)
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -89,6 +94,11 @@ class TicketViewSet(viewsets.ModelViewSet):
             if new_status == 'resolved':
                 ticket.resolved_at = timezone.now()
             serializer.save()
+            # Notifications email
+            if new_status == 'assigned':
+                send_ticket_assigned(ticket)
+            elif new_status == 'resolved':
+                send_ticket_resolved(ticket)
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -175,6 +185,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         ticket.closed_at = timezone.now()
         ticket.closed_by = request.user
         ticket.save()
+        send_ticket_closed(ticket)
 
         return Response({'detail': 'Ticket clôturé avec succès.'})
 

@@ -165,6 +165,10 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 
+# Email
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+DEFAULT_FROM_EMAIL = 'InfoParc BUMIGEB <infoparc@bumigeb.bf>'
+
 AUTH_USER_MODEL = 'users.User'
 
 MEDIA_URL = '/media/'
