@@ -137,6 +137,21 @@ export default function Sidebar() {
         padding: '12px 16px',
         borderTop: '1px solid rgba(255,255,255,0.12)',
       }}>
+        <NavLink
+          to="/profile"
+          style={({ isActive }) => ({
+            display: 'flex', alignItems: 'center', gap: '10px',
+            padding: '8px 4px', fontSize: '13px', textDecoration: 'none',
+            color: isActive ? '#fff' : 'rgba(255,255,255,0.7)',
+            marginBottom: '8px',
+          })}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="8" r="4"/>
+            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+          </svg>
+          Mon profil
+        </NavLink>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
           <div style={{
             width: '28px', height: '28px', borderRadius: '50%',

@@ -52,7 +52,7 @@ class AssignmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Assignment
         fields = '__all__'
-        read_only_fields = ['equipment', 'date_start']
+        read_only_fields = ['equipment']
 
     def validate(self, attrs):
         equipment = attrs.get('equipment')

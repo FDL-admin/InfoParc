@@ -51,6 +51,7 @@ export default function TicketList() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [page, setPage] = useState(1)
+  const [showArchived, setShowArchived] = useState(false)
   const navigate = useNavigate()
 
   const PAGE_SIZE = 20
@@ -59,7 +60,8 @@ export default function TicketList() {
     setLoading(true)
     const params = new URLSearchParams()
     if (search) params.append('search', search)
-    if (statusFilter) params.append('status', statusFilter)
+    if (!showArchived && statusFilter) params.append('status', statusFilter)
+    params.append('archived', showArchived ? 'true' : 'false')
     params.append('page', page)
 
     api.get(`/tickets/?${params.toString()}`)
@@ -73,7 +75,7 @@ export default function TicketList() {
 
   useEffect(() => {
     fetchTickets()
-  }, [statusFilter, page])
+  }, [statusFilter, page, showArchived])
 
   // Recherche avec délai pour ne pas spammer l'API
   useEffect(() => {
@@ -89,18 +91,34 @@ export default function TicketList() {
   return (
     <AppLayout topbar={
       <TopBar
-        title="Tickets"
+        title={showArchived ? 'Archives tickets' : 'Tickets'}
         actions={
-          <button
-            onClick={() => navigate('/tickets/new')}
-            style={{
-              background: '#C2185B', color: '#fff', border: 'none',
-              borderRadius: '6px', padding: '7px 14px',
-              fontSize: '12px', cursor: 'pointer',
-            }}
-          >
-            + Nouvelle DI
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => { setShowArchived(a => !a); setPage(1); setStatusFilter('') }}
+              style={{
+                borderRadius: '6px', padding: '7px 14px',
+                fontSize: '12px', cursor: 'pointer',
+                border: showArchived ? '0.5px solid #888' : '0.5px solid #e0e0e0',
+                color: showArchived ? '#444' : '#666',
+                background: showArchived ? '#F1EFE8' : '#fff',
+              }}
+            >
+              Archives
+            </button>
+            {!showArchived && (
+              <button
+                onClick={() => navigate('/tickets/new')}
+                style={{
+                  background: '#C2185B', color: '#fff', border: 'none',
+                  borderRadius: '6px', padding: '7px 14px',
+                  fontSize: '12px', cursor: 'pointer',
+                }}
+              >
+                + Nouvelle DI
+              </button>
+            )}
+          </div>
         }
       />
     }>
@@ -129,25 +147,27 @@ export default function TicketList() {
           />
         </div>
 
-        {/* Filtres statut */}
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-          {FILTERS.map(f => (
-            <button
-              key={f.value}
-              onClick={() => { setStatusFilter(f.value); setPage(1) }}
-              style={{
-                padding: '5px 12px', borderRadius: '20px', fontSize: '12px',
-                border: '0.5px solid',
-                borderColor: statusFilter === f.value ? '#1B5E20' : '#e0e0e0',
-                background: statusFilter === f.value ? '#1B5E20' : '#fff',
-                color: statusFilter === f.value ? '#fff' : '#666',
-                cursor: 'pointer', transition: 'all .15s',
-              }}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        {/* Filtres statut — masqués en mode archives */}
+        {!showArchived && (
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {FILTERS.map(f => (
+              <button
+                key={f.value}
+                onClick={() => { setStatusFilter(f.value); setPage(1) }}
+                style={{
+                  padding: '5px 12px', borderRadius: '20px', fontSize: '12px',
+                  border: '0.5px solid',
+                  borderColor: statusFilter === f.value ? '#1B5E20' : '#e0e0e0',
+                  background: statusFilter === f.value ? '#1B5E20' : '#fff',
+                  color: statusFilter === f.value ? '#fff' : '#666',
+                  cursor: 'pointer', transition: 'all .15s',
+                }}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Tableau */}
         <div style={{
@@ -196,7 +216,18 @@ export default function TicketList() {
                       <Badge value={t.priority} map={PRIORITY_MAP} />
                     </td>
                     <td style={{ padding: '10px 12px', borderBottom: '0.5px solid #f5f5f5' }}>
-                      <Badge value={t.status} map={STATUS_MAP} />
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                        <Badge value={t.status} map={STATUS_MAP} />
+                        {showArchived && (
+                          <span style={{
+                            background: '#F1EFE8', color: '#5F5E5A',
+                            fontSize: '11px', padding: '2px 7px',
+                            borderRadius: '4px', fontWeight: '500',
+                          }}>
+                            Archivé
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td style={{ padding: '10px 12px', borderBottom: '0.5px solid #f5f5f5', color: '#666' }}>
                       {t.requester_name}

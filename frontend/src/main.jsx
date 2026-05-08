@@ -15,8 +15,8 @@ import TicketCreate from './pages/tickets/TicketCreate'
 import ContractCreate from './pages/contracts/ContractCreate'
 import EquipmentCreate from './pages/equipment/EquipmentCreate'
 import EquipmentEdit from './pages/equipment/EquipmentEdit'
-
-
+import UserDetail from './pages/users/UserDetail'
+import Profile from './pages/profile/Profile'
 
 // Protection des routes — redirige vers /login si non connecté
 function PrivateRoute({ children }) {
@@ -49,6 +49,8 @@ createRoot(document.getElementById('root')).render(
           <Route path="/contracts/new" element={<AdminRoute><ContractCreate /></AdminRoute>} />
           <Route path="/contracts" element={<AdminRoute><ContractList /></AdminRoute>} />
           <Route path="/users" element={<AdminRoute><UserList /></AdminRoute>} />
+          <Route path="/users/:id" element={<AdminRoute><UserDetail /></AdminRoute>} />
+          <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
 
           <Route path="/tickets" element={<PrivateRoute><TicketList /></PrivateRoute>} />
           <Route path="/tickets/new" element={<PrivateRoute><TicketCreate /></PrivateRoute>} />

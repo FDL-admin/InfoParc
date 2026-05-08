@@ -20,9 +20,11 @@ from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
-from users.views import CustomTokenObtainPairView, DashboardView
-
-from users.views import UserViewSet, DepartmentViewSet, DepartmentStatsView
+from users.views import (
+    CustomTokenObtainPairView, DashboardView,
+    UserViewSet, DepartmentViewSet, DepartmentStatsView,
+    PasswordResetRequestView, PasswordResetConfirmView,
+)
 from equipment.views import (
     EquipmentViewSet, SupplierViewSet,
     AssignmentViewSet, SoftwareLicenseViewSet
@@ -62,6 +64,8 @@ urlpatterns = [
     # Routes spécifiques D'ABORD — avant le router
     path('api/auth/token/', CustomTokenObtainPairView.as_view(), name='token_obtain'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/auth/password-reset/', PasswordResetRequestView.as_view(), name='password_reset'),
+    path('api/auth/password-reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('api/dashboard/', DashboardView.as_view(), name='api_dashboard'),
     path('api/departments/stats/', DepartmentStatsView.as_view(), name='department-stats'),
 

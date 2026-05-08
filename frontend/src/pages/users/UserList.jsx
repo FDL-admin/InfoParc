@@ -376,8 +376,10 @@ export default function UserList() {
               ) : (
                 users.map(u => (
                   <tr key={u.id}
+                    style={{ cursor: 'pointer' }}
                     onMouseEnter={e => e.currentTarget.style.background = '#fafafa'}
                     onMouseLeave={e => e.currentTarget.style.background = ''}
+                    onClick={() => navigate(`/users/${u.id}`)}
                   >
                     <td style={{ padding: '10px 12px', borderBottom: '0.5px solid #f5f5f5' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

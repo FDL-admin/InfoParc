@@ -18,7 +18,7 @@ from django.utils import timezone
 from datetime import timedelta
 from django.db import models
 
-from .models import User, Department
+from .models import User, Department, PasswordResetToken
 from .serializers import (
     UserSerializer, UserCreateSerializer,
     UserUpdateSerializer, ChangePasswordSerializer,
@@ -73,20 +73,43 @@ class UserViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def change_password(self, request, pk=None):
-        user = self.get_object()
-        # Un user ne peut changer que son propre mot de passe
-        if request.user.role == 'user' and request.user != user:
+        target_user = self.get_object()
+        requester = request.user
+
+        # Un user standard ne peut changer que son propre mot de passe
+        if requester.role == 'user' and requester != target_user:
             return Response(
                 {'detail': 'Action non autorisée.'},
                 status=status.HTTP_403_FORBIDDEN
             )
+
+        # Admin réinitialisant le mot de passe d'un autre utilisateur
+        # → pas d'ancien mot de passe requis
+        if requester != target_user and requester.role in ('admin', 'superadmin'):
+            new_password = request.data.get('new_password', '')
+            confirm = request.data.get('new_password_confirm', '')
+            if len(new_password) < 8:
+                return Response(
+                    {'new_password': ['Le mot de passe doit contenir au moins 8 caractères.']},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if new_password != confirm:
+                return Response(
+                    {'detail': 'Les mots de passe ne correspondent pas.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            target_user.set_password(new_password)
+            target_user.save()
+            return Response({'detail': 'Mot de passe réinitialisé avec succès.'})
+
+        # Utilisateur changeant son propre mot de passe → ancien mot de passe requis
         serializer = ChangePasswordSerializer(
             data=request.data,
             context={'request': request}
         )
         if serializer.is_valid():
-            user.set_password(serializer.validated_data['new_password'])
-            user.save()
+            target_user.set_password(serializer.validated_data['new_password'])
+            target_user.save()
             return Response({'detail': 'Mot de passe modifié avec succès.'})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -99,6 +122,77 @@ class UserViewSet(viewsets.ModelViewSet):
         state = 'activé' if user.is_active else 'désactivé'
         return Response({'detail': f"Utilisateur {state}."})
     
+
+class PasswordResetRequestView(APIView):
+    permission_classes = []  # public
+
+    def post(self, request):
+        email = request.data.get('email', '').strip()
+        try:
+            user = User.objects.get(email=email)
+            import hashlib, time
+            token = hashlib.sha256(
+                f"{user.email}{user.pk}{time.time()}".encode()
+            ).hexdigest()[:32]
+            PasswordResetToken.objects.create(user=user, token=token)
+            from django.core.mail import send_mail
+            send_mail(
+                subject='[InfoParc] Réinitialisation de votre mot de passe',
+                message=(
+                    f"Bonjour {user.first_name},\n\n"
+                    "Vous avez demandé la réinitialisation de votre mot de passe InfoParc.\n\n"
+                    f"Votre code de réinitialisation : {token}\n\n"
+                    "Ce code est valable 30 minutes.\n"
+                    "Si vous n'avez pas fait cette demande, ignorez cet email.\n\n"
+                    "— InfoParc BUMIGEB"
+                ),
+                from_email='InfoParc BUMIGEB <infoparc@bumigeb.bf>',
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
+        except User.DoesNotExist:
+            pass  # Ne pas révéler si l'email existe
+        return Response(
+            {'detail': 'Si cet email existe, un code vous a été envoyé.'}
+        )
+
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = []  # public
+
+    def post(self, request):
+        token = request.data.get('token', '').strip()
+        new_password = request.data.get('new_password', '')
+        confirm = request.data.get('confirm_password', '')
+
+        if new_password != confirm:
+            return Response(
+                {'detail': 'Les mots de passe ne correspondent pas.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if len(new_password) < 8:
+            return Response(
+                {'detail': 'Le mot de passe doit contenir au moins 8 caractères.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            from datetime import timedelta
+            reset = PasswordResetToken.objects.get(
+                token=token,
+                used=False,
+                created_at__gte=timezone.now() - timedelta(minutes=30)
+            )
+            reset.user.set_password(new_password)
+            reset.user.save()
+            reset.used = True
+            reset.save()
+            return Response({'detail': 'Mot de passe réinitialisé avec succès.'})
+        except PasswordResetToken.DoesNotExist:
+            return Response(
+                {'detail': 'Code invalide ou expiré.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer

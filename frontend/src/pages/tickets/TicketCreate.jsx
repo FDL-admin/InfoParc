@@ -50,6 +50,12 @@ export default function TicketCreate() {
 
   const set = (key, val) => setForm(p => ({ ...p, [key]: val }))
 
+  useEffect(() => {
+    if (user?.id) {
+      set('assigned_to', user.id)
+    }
+  }, [user])
+
   const handleSubmit = async () => {
     if (!form.title.trim() || !form.description.trim()) {
       setError('La désignation et les défauts signalés sont obligatoires.')
@@ -211,7 +217,7 @@ export default function TicketCreate() {
                   <div style={{
                     fontSize: '13px', color: '#333', fontWeight: '500',
                   }}>
-                    {user?.department?.name ?? '—'}
+                    {user?.department?.name ?? 'Non défini'}
                   </div>
                   <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
                     {user?.first_name} {user?.last_name}

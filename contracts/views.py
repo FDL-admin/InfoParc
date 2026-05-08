@@ -89,3 +89,15 @@ class AlertViewSet(viewsets.ModelViewSet):
         alert.status = 'dismissed'
         alert.save()
         return Response({'detail': 'Alerte ignorée.'})
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAdminOrSuperAdmin])
+    def run_checks(self, request):
+        from contracts.tasks import (
+            check_expiring_contracts,
+            check_expiring_licenses,
+            check_expiring_warranties,
+        )
+        check_expiring_contracts()
+        check_expiring_licenses()
+        check_expiring_warranties()
+        return Response({'detail': 'Vérifications lancées. Consultez les alertes.'})

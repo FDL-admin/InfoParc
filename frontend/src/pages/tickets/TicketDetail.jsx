@@ -103,6 +103,8 @@ export default function TicketDetail() {
   const [selectedTech, setSelectedTech] = useState('')
   const [assigning, setAssigning] = useState(false)
 
+  const [deleteIntvError, setDeleteIntvError] = useState('')
+
   const [evalRating, setEvalRating] = useState(0)
   const [evalComment, setEvalComment] = useState('')
   const [evalSaving, setEvalSaving] = useState(false)
@@ -201,6 +203,33 @@ export default function TicketDetail() {
     }
   }
 
+  const handleExportPdf = async () => {
+    try {
+      const response = await api.get(`/tickets/${id}/export_pdf/`, { responseType: 'blob' })
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `DI_${ticket.ticket_number}.pdf`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch {
+      alert('Erreur lors de l\'export PDF.')
+    }
+  }
+
+  const handleDeleteIntervention = async (intvId) => {
+    if (!confirm('Supprimer cette intervention ?')) return
+    setDeleteIntvError('')
+    try {
+      await api.delete(`/interventions/${intvId}/`)
+      fetchTicket()
+    } catch (e) {
+      setDeleteIntvError(e.response?.data?.detail ?? 'Erreur lors de la suppression.')
+    }
+  }
+
   const handleAddIntervention = async () => {
     if (!intervention.description.trim()) {
       alert('La description est obligatoire.')
@@ -255,6 +284,17 @@ export default function TicketDetail() {
         }
         actions={
           <div style={{ display: 'flex', gap: '8px' }}>
+            {/* Export PDF */}
+            <button
+              onClick={handleExportPdf}
+              style={{
+                border: '0.5px solid #1B5E20', color: '#1B5E20',
+                background: '#fff', borderRadius: '6px',
+                padding: '6px 12px', fontSize: '12px', cursor: 'pointer',
+              }}
+            >
+              ↓ PDF
+            </button>
             {/* Transitions de statut */}
             {isAdmin && transitions.map(s => (
               <button
@@ -387,6 +427,15 @@ export default function TicketDetail() {
 
           {/* Interventions */}
           <Section title={`Interventions (${ticket.interventions?.length ?? 0})`}>
+            {deleteIntvError && (
+              <div style={{
+                fontSize: '12px', color: '#791F1F',
+                background: '#FCEBEB', borderRadius: '4px',
+                padding: '8px 12px', marginBottom: '10px',
+              }}>
+                {deleteIntvError}
+              </div>
+            )}
             {ticket.interventions?.length === 0 ? (
               <div style={{ fontSize: '12px', color: '#aaa', marginBottom: '12px' }}>
                 Aucune intervention enregistrée
@@ -404,11 +453,25 @@ export default function TicketDetail() {
                     <div style={{ fontSize: '12px', fontWeight: '500', color: '#1B5E20' }}>
                       Intervention #{idx + 1} — {intv.technician_detail?.first_name} {intv.technician_detail?.last_name}
                     </div>
-                    <div style={{ fontSize: '11px', color: '#888' }}>
-                      {new Date(intv.date).toLocaleDateString('fr-FR', {
-                        day: 'numeric', month: 'long', year: 'numeric',
-                        hour: '2-digit', minute: '2-digit',
-                      })}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      {isAdmin && !['resolved', 'closed', 'archived'].includes(ticket.status) && (
+                        <button
+                          onClick={() => handleDeleteIntervention(intv.id)}
+                          style={{
+                            border: '0.5px solid #E24B4A', color: '#791F1F',
+                            background: '#fff', fontSize: '11px',
+                            borderRadius: '4px', padding: '3px 8px', cursor: 'pointer',
+                          }}
+                        >
+                          Supprimer
+                        </button>
+                      )}
+                      <div style={{ fontSize: '11px', color: '#888' }}>
+                        {new Date(intv.date).toLocaleDateString('fr-FR', {
+                          day: 'numeric', month: 'long', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit',
+                        })}
+                      </div>
                     </div>
                   </div>
                   <div style={{ fontSize: '13px', color: '#444', marginBottom: '6px', lineHeight: '1.5' }}>

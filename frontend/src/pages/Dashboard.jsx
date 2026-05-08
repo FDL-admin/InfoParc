@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import AppLayout from '../components/layout/AppLayout'
 import TopBar from '../components/layout/TopBar'
 import api from '../api/axios'
@@ -32,12 +33,21 @@ function Badge({ value, map, fallback }) {
   )
 }
 
-function StatCard({ label, value, sub, accentColor }) {
+function StatCard({ label, value, sub, accentColor, onClick }) {
+  const [hovered, setHovered] = useState(false)
   return (
-    <div style={{
-      background: '#fff', border: '0.5px solid #e0e0e0',
-      borderRadius: '8px', padding: '12px 16px',
-    }}>
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: '#fff',
+        border: `0.5px solid ${hovered && onClick ? '#1B5E20' : '#e0e0e0'}`,
+        borderRadius: '8px', padding: '12px 16px',
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'border-color .15s',
+      }}
+    >
       <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>{label}</div>
       <div style={{ fontSize: '22px', fontWeight: '500', color: accentColor ?? '#1B5E20' }}>{value}</div>
       {sub && <div style={{ fontSize: '11px', color: '#999', marginTop: '2px' }}>{sub}</div>}
@@ -63,7 +73,50 @@ function Card({ title, children, action }) {
   )
 }
 
+function TicketRow({ t, onClick }) {
+  const [hovered, setHovered] = useState(false)
+  const cell = { padding: '6px 6px', borderBottom: '0.5px solid #f5f5f5' }
+  return (
+    <tr
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{ cursor: 'pointer', background: hovered ? '#fafafa' : 'transparent' }}
+    >
+      <td style={{ ...cell, color: '#666' }}>{t.ticket_number}</td>
+      <td style={cell}>{t.title.length > 28 ? t.title.slice(0, 28) + '…' : t.title}</td>
+      <td style={cell}><Badge value={t.priority} map={priorityBadge} /></td>
+      <td style={cell}><Badge value={t.status} map={badge} /></td>
+    </tr>
+  )
+}
+
+function AlertRow({ a, onClick }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: '10px',
+        padding: '6px 0', borderBottom: '0.5px solid #f5f5f5',
+        fontSize: '12px', cursor: 'pointer',
+        background: hovered ? '#fafafa' : 'transparent',
+      }}
+    >
+      <div style={{
+        width: '7px', height: '7px', borderRadius: '50%',
+        background: a.type === 'contract_expiry' ? '#E24B4A' : '#BA7517',
+        flexShrink: 0,
+      }} />
+      {a.message}
+    </div>
+  )
+}
+
 export default function Dashboard() {
+  const navigate = useNavigate()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -94,18 +147,21 @@ export default function Dashboard() {
             label="Équipements total"
             value={eq.total ?? 0}
             sub={`${eq.stock ?? 0} en stock`}
+            onClick={() => navigate('/equipment')}
           />
           <StatCard
             label="Tickets ouverts"
             value={tk.open ?? 0}
             sub={`${tk.in_progress ?? 0} en cours`}
             accentColor="#C2185B"
+            onClick={() => navigate('/tickets?status=open')}
           />
           <StatCard
             label="Contrats expirant"
             value={data?.contracts?.expiring_soon ?? 0}
             sub="dans 30 jours"
             accentColor="#BA7517"
+            onClick={() => navigate('/contracts?expiring_soon=true')}
           />
           <StatCard
             label="Satisfaction"
@@ -113,6 +169,7 @@ export default function Dashboard() {
               ? `${data.satisfaction.average}/5`
               : '—'}
             sub="moyenne évaluations"
+            onClick={() => navigate('/tickets?status=resolved')}
           />
         </div>
 
@@ -140,20 +197,7 @@ export default function Dashboard() {
                   </td></tr>
                 ) : (
                   (tk.latest_open ?? []).map(t => (
-                    <tr key={t.id}>
-                      <td style={{ padding: '6px 6px', borderBottom: '0.5px solid #f5f5f5', color: '#666' }}>
-                        {t.ticket_number}
-                      </td>
-                      <td style={{ padding: '6px 6px', borderBottom: '0.5px solid #f5f5f5' }}>
-                        {t.title.length > 28 ? t.title.slice(0, 28) + '…' : t.title}
-                      </td>
-                      <td style={{ padding: '6px 6px', borderBottom: '0.5px solid #f5f5f5' }}>
-                        <Badge value={t.priority} map={priorityBadge} />
-                      </td>
-                      <td style={{ padding: '6px 6px', borderBottom: '0.5px solid #f5f5f5' }}>
-                        <Badge value={t.status} map={badge} />
-                      </td>
-                    </tr>
+                    <TicketRow key={t.id} t={t} onClick={() => navigate(`/tickets/${t.id}`)} />
                   ))
                 )}
               </tbody>
@@ -214,18 +258,7 @@ export default function Dashboard() {
             <div style={{ fontSize: '12px', color: '#aaa' }}>Aucune alerte en attente</div>
           ) : (
             alerts.slice(0, 5).map(a => (
-              <div key={a.id} style={{
-                display: 'flex', alignItems: 'center', gap: '10px',
-                padding: '6px 0', borderBottom: '0.5px solid #f5f5f5',
-                fontSize: '12px',
-              }}>
-                <div style={{
-                  width: '7px', height: '7px', borderRadius: '50%',
-                  background: a.type === 'contract_expiry' ? '#E24B4A' : '#BA7517',
-                  flexShrink: 0,
-                }} />
-                {a.message}
-              </div>
+              <AlertRow key={a.id} a={a} onClick={() => navigate('/contracts')} />
             ))
           )}
         </Card>

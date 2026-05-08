@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
+from django.http import HttpResponse
 
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -20,6 +21,7 @@ from .serializers import (
 )
 from users.permissions import IsAdminOrSuperAdmin, IsOwnerOrAdmin, IsSuperAdmin
 from .emails import send_ticket_created, send_ticket_assigned, send_ticket_resolved, send_ticket_closed
+from .pdf import generate_ticket_pdf
 
 class TicketViewSet(viewsets.ModelViewSet):
     queryset = Ticket.objects.select_related(
@@ -189,6 +191,16 @@ class TicketViewSet(viewsets.ModelViewSet):
 
         return Response({'detail': 'Ticket clôturé avec succès.'})
 
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    def export_pdf(self, request, pk=None):
+        ticket = Ticket.objects.select_related(
+            'requester__department', 'assigned_to', 'equipment'
+        ).prefetch_related('interventions__technician', 'evaluation').get(pk=pk)
+        buffer = generate_ticket_pdf(ticket)
+        response = HttpResponse(buffer, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="DI_{ticket.ticket_number}.pdf"'
+        return response
+
     @action(detail=True, methods=['post'], permission_classes=[IsAdminOrSuperAdmin])
     def archive(self, request, pk=None):
         ticket = self.get_object()
@@ -231,6 +243,15 @@ class InterventionViewSet(viewsets.ModelViewSet):
         if ticket_id:
             queryset = queryset.filter(ticket__id=ticket_id)
         return queryset
+
+    def destroy(self, request, *args, **kwargs):
+        intervention = self.get_object()
+        if intervention.ticket.status in ('closed', 'resolved'):
+            return Response(
+                {'detail': 'Impossible de supprimer une intervention sur un ticket résolu ou clôturé.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        return super().destroy(request, *args, **kwargs)
 
 
 class AcquisitionRequestViewSet(viewsets.ModelViewSet):

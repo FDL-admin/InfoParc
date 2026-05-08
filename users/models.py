@@ -79,3 +79,16 @@ class User(AbstractBaseUser, PermissionsMixin):
     class Meta:
         verbose_name = "Utilisateur"
         verbose_name_plural = "Utilisateurs"
+
+
+class PasswordResetToken(models.Model):
+    token = models.CharField(max_length=64, unique=True)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='reset_tokens'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    used = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = "Token de réinitialisation"
+        verbose_name_plural = "Tokens de réinitialisation"

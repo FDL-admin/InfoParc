@@ -67,6 +67,14 @@ export default function EquipmentDetail() {
   const [equipment, setEquipment] = useState(null)
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
+  const [users, setUsers] = useState([])
+  const [assignForm, setAssignForm] = useState({
+    user: '',
+    date_start: new Date().toISOString().split('T')[0],
+    notes: '',
+  })
+  const [assignError, setAssignError] = useState('')
+  const [assigning, setAssigning] = useState(false)
 
   const isAdmin = user?.role === 'admin' || user?.role === 'superadmin'
 
@@ -84,6 +92,37 @@ export default function EquipmentDetail() {
   }
 
   useEffect(() => { fetchEquipment() }, [id])
+
+  useEffect(() => {
+    api.get('/users/').then(res => setUsers(res.data.results ?? res.data)).catch(() => {})
+  }, [])
+
+  const handleAssign = async () => {
+    if (!assignForm.user || !assignForm.date_start) {
+      setAssignError('Veuillez sélectionner un utilisateur et une date de début.')
+      return
+    }
+    setAssigning(true)
+    setAssignError('')
+    try {
+      await api.post(`/equipment/${id}/assign/`, {
+        user: parseInt(assignForm.user),
+        date_start: assignForm.date_start,
+        notes: assignForm.notes,
+      })
+      fetchEquipment()
+      setAssignForm({ user: '', date_start: new Date().toISOString().split('T')[0], notes: '' })
+    } catch (e) {
+      const data = e.response?.data
+      if (data && typeof data === 'object') {
+        setAssignError(Object.values(data).flat().join(' — '))
+      } else {
+        setAssignError("Erreur lors de l'affectation.")
+      }
+    } finally {
+      setAssigning(false)
+    }
+  }
 
   const handleUnassign = async () => {
     if (!confirm('Retirer l\'affectation de cet équipement ?')) return
@@ -208,7 +247,7 @@ export default function EquipmentDetail() {
                   {history.map(h => (
                     <tr key={h.id}>
                       <td style={{ padding: '8px', borderBottom: '0.5px solid #f5f5f5' }}>
-                        {h.user?.first_name} {h.user?.last_name}
+                        {h.user_detail?.first_name} {h.user_detail?.last_name}
                       </td>
                       <td style={{ padding: '8px', borderBottom: '0.5px solid #f5f5f5', color: '#666' }}>
                         {new Date(h.date_start).toLocaleDateString('fr-FR')}
@@ -278,6 +317,90 @@ export default function EquipmentDetail() {
             ) : (
               <div style={{ fontSize: '12px', color: '#aaa' }}>
                 Non affecté — en stock
+              </div>
+            )}
+
+            {/* Formulaire affectation */}
+            {isAdmin && equipment.status !== 'retired' && (
+              <div style={{
+                background: '#F1F8E9', border: '0.5px solid #A5D6A7',
+                borderRadius: '8px', padding: '14px', marginTop: '12px',
+              }}>
+                <div style={{ fontSize: '12px', fontWeight: '500', color: '#1B5E20', marginBottom: '10px' }}>
+                  Affecter à un utilisateur
+                </div>
+
+                <div style={{ marginBottom: '8px' }}>
+                  <div style={{ fontSize: '11px', color: '#888', marginBottom: '3px' }}>Utilisateur *</div>
+                  <select
+                    value={assignForm.user}
+                    onChange={e => setAssignForm(f => ({ ...f, user: e.target.value }))}
+                    style={{
+                      width: '100%', padding: '7px 8px', fontSize: '12px',
+                      border: '0.5px solid #A5D6A7', borderRadius: '6px',
+                      outline: 'none', background: '#fff', boxSizing: 'border-box',
+                    }}
+                  >
+                    <option value="">— Sélectionner —</option>
+                    {users.map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.first_name} {u.last_name}{u.department_detail?.name ? ` — ${u.department_detail.name}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: '8px' }}>
+                  <div style={{ fontSize: '11px', color: '#888', marginBottom: '3px' }}>Date de début *</div>
+                  <input
+                    type="date"
+                    value={assignForm.date_start}
+                    onChange={e => setAssignForm(f => ({ ...f, date_start: e.target.value }))}
+                    style={{
+                      width: '100%', padding: '7px 8px', fontSize: '12px',
+                      border: '0.5px solid #A5D6A7', borderRadius: '6px',
+                      outline: 'none', background: '#fff', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '10px' }}>
+                  <div style={{ fontSize: '11px', color: '#888', marginBottom: '3px' }}>Notes</div>
+                  <input
+                    type="text"
+                    value={assignForm.notes}
+                    onChange={e => setAssignForm(f => ({ ...f, notes: e.target.value }))}
+                    placeholder="Notes sur l'affectation..."
+                    style={{
+                      width: '100%', padding: '7px 8px', fontSize: '12px',
+                      border: '0.5px solid #A5D6A7', borderRadius: '6px',
+                      outline: 'none', background: '#fff', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                {assignError && (
+                  <div style={{
+                    fontSize: '12px', color: '#791F1F',
+                    background: '#FCEBEB', borderRadius: '4px',
+                    padding: '7px 10px', marginBottom: '10px',
+                  }}>
+                    {assignError}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleAssign}
+                  disabled={assigning}
+                  style={{
+                    background: assigning ? '#81C784' : '#1B5E20',
+                    color: '#fff', border: 'none',
+                    borderRadius: '6px', padding: '7px 16px',
+                    fontSize: '12px', cursor: assigning ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {assigning ? 'Affectation...' : 'Affecter'}
+                </button>
               </div>
             )}
           </Section>

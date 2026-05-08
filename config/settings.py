@@ -45,7 +45,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'django_filters',
-    
+    'django_crontab',
+
     # apps local
     'users',
     'equipment',
@@ -176,3 +177,11 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
+
+
+# Tâches cron — exécutées quotidiennement à 07h00/05/10
+CRONJOBS = [
+    ('0 7 * * *',  'contracts.tasks.check_expiring_contracts'),
+    ('5 7 * * *',  'contracts.tasks.check_expiring_licenses'),
+    ('10 7 * * *', 'contracts.tasks.check_expiring_warranties'),
+]
