@@ -19,6 +19,11 @@ api.interceptors.response.use(
   async (error) => {
     const original = error.config
 
+    // Ne jamais intercepter les requêtes de login/refresh
+    if (original.url.includes('/auth/token')) {
+      return Promise.reject(error)
+    }
+
     // Token expiré → on tente un refresh automatique
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true

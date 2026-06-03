@@ -38,8 +38,23 @@ export default function Login() {
     try {
       await login(email, password)
       navigate('/')
-    } catch {
-      setError('Email ou mot de passe incorrect.')
+      } catch (e) {
+      const status = e.response?.status
+      const detail = e.response?.data?.detail ?? ''
+
+      if (status === 401) {
+        if (detail.toLowerCase().includes('active')) {
+        setError('Email ou mot de passe incorrect. Si le problème persiste, contactez votre administrateur.')
+      } else {
+        setError('Email ou mot de passe incorrect.')
+      }
+      } else if (status === 400) {
+        setError('Veuillez remplir tous les champs.')
+      } else if (!e.response) {
+        setError('Impossible de contacter le serveur. Vérifiez votre connexion.')
+      } else {
+        setError('Une erreur est survenue. Veuillez réessayer.')
+     }
     } finally {
       setLoading(false)
     }
