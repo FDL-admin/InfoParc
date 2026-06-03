@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import AppLayout from '../../components/layout/AppLayout'
 import TopBar from '../../components/layout/TopBar'
 import api from '../../api/axios'
+import { useDialog } from '../../context/DialogContext'
 import { useAuth } from '../../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
+
+const FONT = "'Inter', system-ui, sans-serif"
 
 const EMPTY_FORM = {
   first_name: '', last_name: '', email: '',
@@ -233,7 +236,7 @@ function Avatar({ firstName, lastName }) {
   return (
     <div style={{
       width: '28px', height: '28px', borderRadius: '50%',
-      background: '#C2185B', display: 'flex', alignItems: 'center',
+      background: '#C62828', display: 'flex', alignItems: 'center',
       justifyContent: 'center', fontSize: '11px', fontWeight: '500',
       color: '#fff', flexShrink: 0,
     }}>
@@ -245,6 +248,7 @@ function Avatar({ firstName, lastName }) {
 export default function UserList() {
   const { user: me } = useAuth()
   const navigate = useNavigate()
+  const { confirm, toast } = useDialog()
 
   const [users, setUsers] = useState([])
   const [count, setCount] = useState(0)
@@ -293,12 +297,18 @@ export default function UserList() {
 
   const handleToggleActive = async (userId, currentState) => {
     const action = currentState ? 'désactiver' : 'activer'
-    if (!confirm(`Voulez-vous ${action} cet utilisateur ?`)) return
+    const ok = await confirm({
+      title: currentState ? 'Désactiver l\'utilisateur' : 'Activer l\'utilisateur',
+      message: `Voulez-vous ${action} cet utilisateur ?`,
+      variant: currentState ? 'warning' : 'default',
+      confirmLabel: currentState ? 'Désactiver' : 'Activer',
+    })
+    if (!ok) return
     try {
       await api.post(`/users/${userId}/toggle_active/`)
       fetchUsers()
     } catch {
-      alert('Erreur lors de la modification.')
+      toast({ title: 'Erreur', message: 'Erreur lors de la modification.', variant: 'danger' })
     }
   }
 
@@ -312,9 +322,9 @@ export default function UserList() {
           <button
             onClick={() => setShowModal(true)}
             style={{
-              background: '#C2185B', color: '#fff', border: 'none',
-              borderRadius: '6px', padding: '7px 14px',
-              fontSize: '12px', cursor: 'pointer',
+              background: '#1B5E20', color: '#fff', border: 'none',
+              borderRadius: '7px', padding: '6px 16px',
+              fontSize: '13px', cursor: 'pointer', fontFamily: FONT,
             }}
           >
             + Nouvel utilisateur

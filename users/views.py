@@ -11,6 +11,7 @@ from django.db.models import (
     Count, Avg, Sum, F, ExpressionWrapper,
     DurationField, Q
 )
+from django.db.models.functions import TruncWeek
 from equipment.models import Equipment
 from tickets.models import Ticket, Evaluation
 from contracts.models import Contract
@@ -259,6 +260,36 @@ class DashboardView(APIView):
             'requester', 'assigned_to', 'equipment'
         ).order_by('-created_at')[:5]
 
+        # Série temporelle — tickets créés et résolus par semaine (12 dernières semaines)
+        twelve_weeks_ago = today - timedelta(weeks=12)
+
+        created_by_week = (
+            Ticket.objects.filter(created_at__date__gte=twelve_weeks_ago)
+            .annotate(week=TruncWeek('created_at'))
+            .values('week')
+            .annotate(count=Count('id'))
+            .order_by('week')
+        )
+        resolved_by_week = (
+            Ticket.objects.filter(
+                resolved_at__isnull=False,
+                resolved_at__date__gte=twelve_weeks_ago
+            )
+            .annotate(week=TruncWeek('resolved_at'))
+            .values('week')
+            .annotate(count=Count('id'))
+            .order_by('week')
+        )
+
+        def build_series(qs):
+            return [
+                {
+                    'week': entry['week'].strftime('%d/%m') if entry['week'] else '',
+                    'count': entry['count'],
+                }
+                for entry in qs
+            ]
+
         return Response({
             'equipment': {
                 **equipment_stats,
@@ -269,6 +300,8 @@ class DashboardView(APIView):
                 **ticket_stats,
                 'this_month': tickets_this_month,
                 'latest_open': TicketListSerializer(latest_tickets, many=True).data,
+                'created_by_week': build_series(created_by_week),
+                'resolved_by_week': build_series(resolved_by_week),
             },
             'satisfaction': {
                 'average': round(avg_rating, 2) if avg_rating else None,
