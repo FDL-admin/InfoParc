@@ -1,15 +1,19 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppLayout from '../../components/layout/AppLayout'
 import TopBar from '../../components/layout/TopBar'
 import api from '../../api/axios'
+import { useDialog } from '../../context/DialogContext'
 
+const FONT = "'Inter', system-ui, sans-serif"
+
+// ── Maps ─────────────────────────────────────────────────────
 const STATUS_MAP = {
-  active:  { bg: '#EAF3DE', color: '#27500A', label: 'Actif' },
-  broken:  { bg: '#FCEBEB', color: '#791F1F', label: 'En panne' },
-  repair:  { bg: '#FAEEDA', color: '#633806', label: 'En réparation' },
-  retired: { bg: '#F1EFE8', color: '#5F5E5A', label: 'Mis au rebut' },
-  stock:   { bg: '#E6F1FB', color: '#185FA5', label: 'En stock' },
+  active:  { bg: '#dcfce7', color: '#166534', label: 'Actif' },
+  broken:  { bg: '#fee2e2', color: '#991b1b', label: 'En panne' },
+  repair:  { bg: '#fef3c7', color: '#92400e', label: 'En réparation' },
+  retired: { bg: '#f3f4f6', color: '#6b7280', label: 'Mis au rebut' },
+  stock:   { bg: '#e0f2fe', color: '#075985', label: 'En stock' },
 }
 
 const TYPE_MAP = {
@@ -23,95 +27,188 @@ const TYPE_MAP = {
   other:   'Autre',
 }
 
-function Badge({ value, map }) {
-  const s = map[value] ?? { bg: '#F1EFE8', color: '#444441', label: value }
+// ── Filtres ───────────────────────────────────────────────────
+const TYPE_FILTERS = [
+  { label: 'Tous',        value: '',        icon: null },
+  { label: 'Desktop',     value: 'desktop', icon: 'desktop' },
+  { label: 'Laptop',      value: 'laptop',  icon: 'laptop' },
+  { label: 'Imprimante',  value: 'printer', icon: 'printer' },
+  { label: 'Réseau',      value: 'network', icon: 'network' },
+  { label: 'Serveur',     value: 'server',  icon: 'server' },
+  { label: 'Scanner',     value: 'scanner', icon: 'scanner' },
+]
+
+const STATUS_FILTERS = [
+  { label: 'Tous',           value: '' },
+  { label: 'Actif',          value: 'active' },
+  { label: 'En panne',       value: 'broken' },
+  { label: 'En réparation',  value: 'repair' },
+  { label: 'En stock',       value: 'stock' },
+]
+
+// ── Icônes type ───────────────────────────────────────────────
+const TypeIcon = ({ type, size = 14 }) => {
+  const p = { width: size, height: size, style: { flexShrink: 0 }, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.7' }
+  switch (type) {
+    case 'desktop': return <svg {...p}><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+    case 'laptop':  return <svg {...p}><path d="M4 16V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10"/><path d="M2 16h20v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-2z"/></svg>
+    case 'printer': return <svg {...p}><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+    case 'server':  return <svg {...p}><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1" fill="currentColor"/><circle cx="6" cy="18" r="1" fill="currentColor"/></svg>
+    case 'network': return <svg {...p}><rect x="2" y="9" width="20" height="6" rx="2"/><circle cx="6" cy="12" r="1" fill="currentColor"/><path d="M6 15v2M12 15v2M18 15v2"/></svg>
+    case 'scanner': return <svg {...p}><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>
+    default:        return <svg {...p}><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+  }
+}
+
+// ── Composants UI ─────────────────────────────────────────────
+function Badge({ value }) {
+  const s = STATUS_MAP[value] ?? { bg: '#f3f4f6', color: '#6b7280', label: value }
   return (
     <span style={{
       background: s.bg, color: s.color,
-      fontSize: '11px', padding: '2px 7px',
-      borderRadius: '4px', fontWeight: '500',
+      fontSize: '11.5px', padding: '3px 9px',
+      borderRadius: '6px', fontWeight: '500',
+      fontFamily: FONT, whiteSpace: 'nowrap',
+      letterSpacing: '0.01em',
     }}>
-      {s.label ?? value}
+      {s.label}
     </span>
   )
 }
 
-const TYPE_FILTERS = [
-  { label: 'Tous', value: '' },
-  { label: 'Desktop', value: 'desktop' },
-  { label: 'Laptop', value: 'laptop' },
-  { label: 'Imprimante', value: 'printer' },
-  { label: 'Réseau', value: 'network' },
-  { label: 'Serveur', value: 'server' },
-]
+function WarrantyCell({ date }) {
+  if (!date) return <span style={{ color: '#d1d5db', fontSize: '13px' }}>—</span>
+  const d    = new Date(date)
+  const now  = new Date()
+  const days = Math.ceil((d - now) / 86400000)
+  const fmt  = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
-const STATUS_FILTERS = [
-  { label: 'Tous statuts', value: '' },
-  { label: 'Actif', value: 'active' },
-  { label: 'En panne', value: 'broken' },
-  { label: 'En réparation', value: 'repair' },
-  { label: 'En stock', value: 'stock' },
-]
+  if (days < 0)   return <span style={{ color: '#dc2626', fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: 4 }}><WarnIcon /> {fmt}</span>
+  if (days <= 60) return <span style={{ color: '#d97706', fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: 4 }}><WarnIcon color="#d97706"/> {fmt}</span>
+  return <span style={{ color: '#6b7280', fontSize: '12.5px' }}>{fmt}</span>
+}
 
+const WarnIcon = ({ color = '#dc2626' }) => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" style={{ flexShrink: 0 }}>
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>
+)
+
+// ── Toolbar Button (type pills) ───────────────────────────────
+function TypePill({ label, icon, active, onClick }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: '5px',
+        padding: '5px 11px', borderRadius: '7px',
+        fontSize: '13px', fontFamily: FONT,
+        border: active ? '1.5px solid #1B5E20' : '1px solid #e5e7eb',
+        background: active ? '#1B5E20' : hov ? '#f9fafb' : '#fff',
+        color: active ? '#fff' : '#374151',
+        cursor: 'pointer', transition: 'all .12s',
+        whiteSpace: 'nowrap', letterSpacing: '0.01em',
+      }}
+    >
+      {icon && <TypeIcon type={icon} size={13} />}
+      {label}
+    </button>
+  )
+}
+
+function StatusPill({ label, value, active, onClick }) {
+  const [hov, setHov] = useState(false)
+  const map = STATUS_MAP[value]
+  const activeBg    = map?.color ?? '#374151'
+  const activeBorder= map?.color ?? '#374151'
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        padding: '5px 11px', borderRadius: '7px',
+        fontSize: '13px', fontFamily: FONT,
+        border: active ? `1.5px solid ${activeBorder}` : '1px solid #e5e7eb',
+        background: active ? (map?.bg ?? '#f3f4f6') : hov ? '#f9fafb' : '#fff',
+        color: active ? activeBg : '#374151',
+        cursor: 'pointer', transition: 'all .12s',
+        whiteSpace: 'nowrap', fontWeight: active ? '600' : '400',
+        letterSpacing: '0.01em',
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
+// ── Page ─────────────────────────────────────────────────────
 export default function EquipmentList() {
   const [equipment, setEquipment] = useState([])
-  const [count, setCount] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [typeFilter, setTypeFilter] = useState('')
+  const [count,     setCount]     = useState(0)
+  const [loading,   setLoading]   = useState(true)
+  const [search,    setSearch]    = useState('')
+  const [typeFilter,   setTypeFilter]   = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [page, setPage] = useState(1)
-  const [scanning, setScanning] = useState(false)
+  const [page,      setPage]      = useState(1)
+  const [scanning,  setScanning]  = useState(false)
   const navigate = useNavigate()
-
-
+  const { confirm, toast } = useDialog()
   const PAGE_SIZE = 20
 
-  const fetchEquipment = () => {
+  const fetch = () => {
     setLoading(true)
-    const params = new URLSearchParams()
-    if (search) params.append('search', search)
-    if (typeFilter) params.append('type', typeFilter)
-    if (statusFilter) params.append('status', statusFilter)
-    params.append('page', page)
-
-    api.get(`/equipment/?${params.toString()}`)
-      .then(res => {
-        setEquipment(res.data.results ?? res.data)
-        setCount(res.data.count ?? 0)
-      })
+    const p = new URLSearchParams()
+    if (search)      p.append('search', search)
+    if (typeFilter)  p.append('type', typeFilter)
+    if (statusFilter)p.append('status', statusFilter)
+    p.append('page', page)
+    api.get(`/equipment/?${p}`)
+      .then(r => { setEquipment(r.data.results ?? r.data); setCount(r.data.count ?? 0) })
       .catch(console.error)
       .finally(() => setLoading(false))
   }
 
+  useEffect(() => { fetch() }, [typeFilter, statusFilter, page])
   useEffect(() => {
-    fetchEquipment()
-  }, [typeFilter, statusFilter, page])
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setPage(1)
-      fetchEquipment()
-    }, 400)
+    const t = setTimeout(() => { setPage(1); fetch() }, 380)
     return () => clearTimeout(t)
   }, [search])
 
   const handleScan = async () => {
-    if (!confirm('Lancer un scan du réseau 192.168.11.0/24 ?')) return
+    const ok = await confirm({ title: 'Scan réseau', message: 'Lancer un scan du réseau 192.168.11.0/24 ? Cette opération peut prendre quelques instants.', confirmLabel: 'Lancer le scan' })
+    if (!ok) return
     setScanning(true)
     try {
-      const res = await api.post('/equipment/discover/')
-      const { summary, created } = res.data
-      alert(`Scan terminé.\n${summary.hosts_found} hôtes détectés\n${summary.created} nouveaux équipements créés\n${summary.skipped} déjà enregistrés`)
-      fetchEquipment()
-    } catch {
-      alert('Erreur lors du scan réseau.')
-    } finally {
-      setScanning(false)
-    }
+      const r = await api.post('/equipment/discover/')
+      const { summary } = r.data
+      toast({ title: 'Scan terminé', message: `${summary.hosts_found} hôtes détectés · ${summary.created} nouveaux · ${summary.skipped} déjà enregistrés`, variant: 'success', duration: 6000 })
+      fetch()
+    } catch (err) {
+      const msg = err.response?.data?.detail ?? 'Erreur lors du scan réseau.'
+      toast({ title: 'Scan échoué', message: msg, variant: 'danger', duration: 6000 })
+    } finally { setScanning(false) }
   }
 
   const totalPages = Math.ceil(count / PAGE_SIZE)
+
+  const thStyle = {
+    textAlign: 'left', padding: '11px 16px',
+    fontSize: '11px', color: '#9ca3af',
+    fontWeight: '600', fontFamily: FONT,
+    borderBottom: '1px solid #f3f4f6',
+    whiteSpace: 'nowrap', background: '#fafafa',
+    letterSpacing: '0.07em', textTransform: 'uppercase',
+  }
+  const tdStyle = {
+    padding: '12px 16px',
+    borderBottom: '1px solid #f3f4f6',
+    fontFamily: FONT, verticalAlign: 'middle',
+  }
 
   return (
     <AppLayout topbar={
@@ -124,19 +221,40 @@ export default function EquipmentList() {
               disabled={scanning}
               style={{
                 background: '#fff', color: '#1B5E20',
-                border: '0.5px solid #1B5E20',
-                borderRadius: '6px', padding: '7px 14px',
-                fontSize: '12px', cursor: scanning ? 'not-allowed' : 'pointer',
+                border: '1px solid #1B5E20', borderRadius: '7px',
+                padding: '6px 14px', fontSize: '13px',
+                cursor: scanning ? 'not-allowed' : 'pointer',
+                fontFamily: FONT, letterSpacing: '0.01em',
+                display: 'flex', alignItems: 'center', gap: '7px',
+                opacity: scanning ? 0.7 : 1,
               }}
             >
-              {scanning ? 'Scan en cours...' : 'Scan réseau'}
+              {scanning ? (
+                <>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                    style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }}>
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                  </svg>
+                  Scan en cours…
+                </>
+              ) : (
+                <>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="m21 21-4.35-4.35"/>
+                  </svg>
+                  Scan réseau
+                </>
+              )}
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </button>
             <button
               onClick={() => navigate('/equipment/new')}
               style={{
-                background: '#C2185B', color: '#fff', border: 'none',
-                borderRadius: '6px', padding: '7px 14px',
-                fontSize: '12px', cursor: 'pointer',
+                background: '#1B5E20', color: '#fff', border: 'none',
+                borderRadius: '7px', padding: '6px 16px',
+                fontSize: '13px', cursor: 'pointer',
+                fontFamily: FONT, letterSpacing: '0.01em',
               }}
             >
               + Ajouter
@@ -146,199 +264,230 @@ export default function EquipmentList() {
       />
     }>
 
-      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px', background: '#f8f9fa', minHeight: '100%' }}>
 
-        {/* Recherche */}
+        {/* ── Toolbar ── */}
         <div style={{
-          display: 'flex', alignItems: 'center', gap: '8px',
-          background: '#fff', border: '0.5px solid #e0e0e0',
-          borderRadius: '6px', padding: '7px 12px',
+          background: '#fff', border: '1px solid #eaecf0',
+          borderRadius: '12px', padding: '14px 16px',
+          display: 'flex', alignItems: 'center', gap: '12px',
+          flexWrap: 'wrap', boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
         }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="#aaa" strokeWidth="2">
-            <circle cx="11" cy="11" r="8"/>
-            <path d="m21 21-4.35-4.35"/>
-          </svg>
-          <input
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1) }}
-            placeholder="Rechercher par nom, numéro de série, marque..."
-            style={{
-              border: 'none', outline: 'none', fontSize: '13px',
-              color: '#333', flex: 1, background: 'transparent',
-            }}
-          />
-        </div>
 
-        {/* Filtres type */}
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-          {TYPE_FILTERS.map(f => (
-            <button
-              key={f.value}
-              onClick={() => { setTypeFilter(f.value); setPage(1) }}
+          {/* Recherche */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            border: '1px solid #e5e7eb', borderRadius: '8px',
+            padding: '6px 12px', width: '280px', flexShrink: 0,
+            background: '#fafafa',
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" style={{ flexShrink: 0 }}>
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1) }}
+              placeholder="Nom, N° série, marque…"
               style={{
-                padding: '5px 12px', borderRadius: '20px', fontSize: '12px',
-                border: '0.5px solid',
-                borderColor: typeFilter === f.value ? '#1B5E20' : '#e0e0e0',
-                background: typeFilter === f.value ? '#1B5E20' : '#fff',
-                color: typeFilter === f.value ? '#fff' : '#666',
-                cursor: 'pointer', transition: 'all .15s',
+                border: 'none', outline: 'none', fontSize: '13.5px',
+                color: '#374151', background: 'transparent', width: '100%',
+                fontFamily: FONT,
               }}
-            >
-              {f.label}
-            </button>
-          ))}
+            />
+            {search && (
+              <button onClick={() => setSearch('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: '16px', lineHeight: 1, padding: 0 }}>×</button>
+            )}
+          </div>
 
-          <div style={{ width: '1px', height: '20px', background: '#e0e0e0' }} />
+          {/* Séparateur */}
+          <div style={{ width: '1px', height: '28px', background: '#e5e7eb', flexShrink: 0 }} />
 
-          {/* Filtre statut */}
-          <select
-            value={statusFilter}
-            onChange={e => { setStatusFilter(e.target.value); setPage(1) }}
-            style={{
-              padding: '5px 10px', borderRadius: '6px', fontSize: '12px',
-              border: '0.5px solid #e0e0e0', background: '#fff',
-              color: '#666', cursor: 'pointer', outline: 'none',
-            }}
-          >
-            {STATUS_FILTERS.map(f => (
-              <option key={f.value} value={f.value}>{f.label}</option>
+          {/* Filtres type */}
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {TYPE_FILTERS.map(f => (
+              <TypePill
+                key={f.value}
+                label={f.label}
+                icon={f.icon}
+                active={typeFilter === f.value}
+                onClick={() => { setTypeFilter(f.value); setPage(1) }}
+              />
             ))}
-          </select>
+          </div>
+
+          {/* Séparateur */}
+          <div style={{ width: '1px', height: '28px', background: '#e5e7eb', flexShrink: 0 }} />
+
+          {/* Filtres statut */}
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {STATUS_FILTERS.map(f => (
+              <StatusPill
+                key={f.value}
+                label={f.label}
+                value={f.value}
+                active={statusFilter === f.value}
+                onClick={() => { setStatusFilter(f.value); setPage(1) }}
+              />
+            ))}
+          </div>
+
+          {/* Compteur à droite */}
+          <span style={{ marginLeft: 'auto', fontSize: '13px', color: '#9ca3af', fontFamily: FONT, whiteSpace: 'nowrap' }}>
+            {loading ? '…' : `${count} résultat${count > 1 ? 's' : ''}`}
+          </span>
         </div>
 
-        {/* Tableau */}
+        {/* ── Bannière scan en cours ── */}
+        {scanning && (
+          <div style={{
+            background: '#f0fdf4', border: '1px solid #bbf7d0',
+            borderRadius: '10px', padding: '12px 16px',
+            display: 'flex', alignItems: 'center', gap: '10px',
+            fontSize: '13px', color: '#166534', fontFamily: FONT,
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2"
+              style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }}>
+              <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+            </svg>
+            Scan du réseau en cours…
+          </div>
+        )}
+
+        {/* ── Table card ── */}
         <div style={{
-          background: '#fff', border: '0.5px solid #e0e0e0',
-          borderRadius: '8px', overflow: 'hidden',
+          background: '#fff', border: '1px solid #eaecf0',
+          borderRadius: '12px', overflow: 'hidden',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          opacity: scanning ? 0.5 : 1,
+          transition: 'opacity .3s',
+          pointerEvents: scanning ? 'none' : 'auto',
         }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#fafafa' }}>
+              <tr>
                 {['Nom', 'Type', 'Marque / Modèle', 'N° série', 'Département', 'Affecté à', 'Statut', 'Garantie'].map(h => (
-                  <th key={h} style={{
-                    textAlign: 'left', padding: '10px 12px',
-                    color: '#888', fontWeight: '400',
-                    borderBottom: '0.5px solid #eee', whiteSpace: 'nowrap',
-                  }}>{h}</th>
+                  <th key={h} style={thStyle}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} style={{ padding: '20px', textAlign: 'center', color: '#aaa' }}>
-                  Chargement...
+                <tr><td colSpan={8} style={{ ...tdStyle, textAlign: 'center', color: '#d1d5db', padding: '40px', fontStyle: 'italic' }}>
+                  Chargement…
                 </td></tr>
               ) : equipment.length === 0 ? (
-                <tr><td colSpan={8} style={{ padding: '20px', textAlign: 'center', color: '#aaa' }}>
+                <tr><td colSpan={8} style={{ ...tdStyle, textAlign: 'center', color: '#d1d5db', padding: '40px', fontStyle: 'italic' }}>
                   Aucun équipement trouvé
                 </td></tr>
-              ) : (
-                equipment.map(eq => {
-                  const warrantyExpired = eq.warranty_end_date
-                    && new Date(eq.warranty_end_date) < new Date()
-
-                  return (
-                    <tr key={eq.id}
-                      onMouseEnter={e => e.currentTarget.style.background = '#fafafa'}
-                      onMouseLeave={e => e.currentTarget.style.background = ''}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => navigate(`/equipment/${eq.id}`)}
-
-                    >
-                      <td style={{ padding: '10px 12px', borderBottom: '0.5px solid #f5f5f5', fontWeight: '500' }}>
-                        {eq.name}
-                      </td>
-                      <td style={{ padding: '10px 12px', borderBottom: '0.5px solid #f5f5f5', color: '#666' }}>
-                        {TYPE_MAP[eq.type] ?? eq.type}
-                      </td>
-                      <td style={{ padding: '10px 12px', borderBottom: '0.5px solid #f5f5f5', color: '#666' }}>
-                        {[eq.brand, eq.model].filter(Boolean).join(' ') || '—'}
-                      </td>
-                      <td style={{ padding: '10px 12px', borderBottom: '0.5px solid #f5f5f5', color: '#888', fontFamily: 'monospace', fontSize: '11px' }}>
-                        {eq.serial_number || '—'}
-                      </td>
-                      <td style={{ padding: '10px 12px', borderBottom: '0.5px solid #f5f5f5', color: '#666' }}>
-                        {eq.department_name || '—'}
-                      </td>
-                      <td style={{ padding: '10px 12px', borderBottom: '0.5px solid #f5f5f5', color: '#666' }}>
-                        {eq.assigned_to_name || '—'}
-                      </td>
-                      <td style={{ padding: '10px 12px', borderBottom: '0.5px solid #f5f5f5' }}>
-                        <Badge value={eq.status} map={STATUS_MAP} />
-                      </td>
-                      <td style={{ padding: '10px 12px', borderBottom: '0.5px solid #f5f5f5', whiteSpace: 'nowrap' }}>
-                        {eq.warranty_end_date ? (
-                          <span style={{
-                            fontSize: '11px',
-                            color: warrantyExpired ? '#791F1F' : '#27500A',
-                          }}>
-                            {warrantyExpired ? '⚠ ' : ''}
-                            {new Date(eq.warranty_end_date).toLocaleDateString('fr-FR')}
-                          </span>
-                        ) : (
-                          <span style={{ color: '#ccc', fontSize: '11px' }}>—</span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
+              ) : equipment.map(eq => (
+                <EquipmentRow key={eq.id} eq={eq} tdStyle={tdStyle} onClick={() => navigate(`/equipment/${eq.id}`)} />
+              ))}
             </tbody>
           </table>
         </div>
 
-        {/* Pagination */}
+        {/* ── Pagination ── */}
         {totalPages > 1 && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '4px' }}>
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '4px' }}>
+            <PageBtn
+              label="←"
               disabled={page === 1}
-              style={{
-                padding: '5px 10px', border: '0.5px solid #e0e0e0',
-                borderRadius: '4px 0 0 4px', background: '#fff',
-                cursor: page === 1 ? 'not-allowed' : 'pointer',
-                color: page === 1 ? '#ccc' : '#666', fontSize: '12px',
-              }}
-            >←</button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .filter(n => n === 1 || n === totalPages || Math.abs(n - page) <= 1)
-              .map((n, idx, arr) => (
-                <>
-                  {idx > 0 && arr[idx - 1] !== n - 1 && (
-                    <span key={`dots-${n}`} style={{ padding: '5px 8px', fontSize: '12px', color: '#aaa' }}>…</span>
-                  )}
-                  <button
-                    key={n}
-                    onClick={() => setPage(n)}
-                    style={{
-                      padding: '5px 10px', border: '0.5px solid #e0e0e0',
-                      background: page === n ? '#1B5E20' : '#fff',
-                      color: page === n ? '#fff' : '#666',
-                      cursor: 'pointer', fontSize: '12px',
-                    }}
-                  >{n}</button>
-                </>
-              ))
-            }
-            <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+            />
+            {buildPageNumbers(page, totalPages).map((n, i) =>
+              n === '…'
+                ? <span key={`d${i}`} style={{ padding: '0 4px', color: '#9ca3af', fontSize: '13px' }}>…</span>
+                : <PageBtn key={n} label={n} active={page === n} onClick={() => setPage(n)} />
+            )}
+            <PageBtn
+              label="→"
               disabled={page === totalPages}
-              style={{
-                padding: '5px 10px', border: '0.5px solid #e0e0e0',
-                borderRadius: '0 4px 4px 0', background: '#fff',
-                cursor: page === totalPages ? 'not-allowed' : 'pointer',
-                color: page === totalPages ? '#ccc' : '#666', fontSize: '12px',
-              }}
-            >→</button>
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            />
           </div>
         )}
-
-        <div style={{ fontSize: '11px', color: '#aaa', textAlign: 'right' }}>
-          {count} équipement{count > 1 ? 's' : ''} au total
-        </div>
 
       </div>
     </AppLayout>
   )
 }
+
+// ── Ligne équipement ──────────────────────────────────────────
+function EquipmentRow({ eq, tdStyle, onClick }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <tr
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{ cursor: 'pointer', background: hov ? '#fafafa' : 'transparent', transition: 'background .1s' }}
+    >
+      <td style={{ ...tdStyle, fontWeight: '500', color: '#111827', fontSize: '13.5px' }}>
+        {eq.name}
+      </td>
+      <td style={{ ...tdStyle, color: '#6b7280', fontSize: '13px' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <TypeIcon type={eq.type} size={13} />
+          {TYPE_MAP[eq.type] ?? eq.type}
+        </span>
+      </td>
+      <td style={{ ...tdStyle, color: '#6b7280', fontSize: '13px' }}>
+        {[eq.brand, eq.model].filter(Boolean).join(' ') || '—'}
+      </td>
+      <td style={{ ...tdStyle, color: '#9ca3af', fontFamily: 'ui-monospace, monospace', fontSize: '11.5px', letterSpacing: '0.06em' }}>
+        {eq.serial_number || '—'}
+      </td>
+      <td style={{ ...tdStyle, color: '#6b7280', fontSize: '13px' }}>
+        {eq.department_name || '—'}
+      </td>
+      <td style={{ ...tdStyle, color: '#374151', fontSize: '13px', fontWeight: '500' }}>
+        {eq.assigned_to_name || <span style={{ color: '#d1d5db' }}>—</span>}
+      </td>
+      <td style={tdStyle}>
+        <Badge value={eq.status} />
+      </td>
+      <td style={tdStyle}>
+        <WarrantyCell date={eq.warranty_end_date} />
+      </td>
+    </tr>
+  )
+}
+
+// ── Bouton pagination ─────────────────────────────────────────
+function PageBtn({ label, active, disabled, onClick }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        minWidth: '32px', height: '32px', padding: '0 8px',
+        border: active ? '1.5px solid #1B5E20' : '1px solid #e5e7eb',
+        borderRadius: '7px',
+        background: active ? '#1B5E20' : hov && !disabled ? '#f9fafb' : '#fff',
+        color: active ? '#fff' : disabled ? '#d1d5db' : '#374151',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        fontSize: '13px', fontFamily: FONT,
+        transition: 'all .12s',
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
+// ── Utilitaire pagination ─────────────────────────────────────
+function buildPageNumbers(current, total) {
+  const pages = []
+  for (let i = 1; i <= total; i++) {
+    if (i === 1 || i === total || Math.abs(i - current) <= 1) {
+      pages.push(i)
+    } else if (pages[pages.length - 1] !== '…') {
+      pages.push('…')
+    }
+  }
+  return pages
+}
+

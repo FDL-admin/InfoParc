@@ -15,7 +15,11 @@ from .serializers import (
 )
 from users.permissions import IsAdminOrSuperAdmin, IsSuperAdmin
 
-import nmap
+import subprocess
+import socket
+import platform
+import concurrent.futures
+from ipaddress import IPv4Network
 
 class EquipmentViewSet(viewsets.ModelViewSet):
     queryset = Equipment.objects.select_related(
@@ -111,81 +115,108 @@ class EquipmentViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], permission_classes=[IsAdminOrSuperAdmin])
     def discover(self, request):
         """
-        Scan réseau et création automatique des machines détectées.
+        Scan réseau sans dépendance externe — ping + ARP.
         POST /api/equipment/discover/
         Body optionnel : {"network": "192.168.11.0/24"}
         """
-        # Plage réseau — paramétrable, défaut = réseau BUMIGEB
-        network = request.data.get('network', '192.168.11.0/24')
+        network_str = request.data.get('network', '192.168.11.0/24')
 
         try:
-            nm = nmap.PortScanner()
-            # -sn = ping scan uniquement (pas de scan de ports)
-            # -T4 = vitesse agressive mais raisonnable
-            # --host-timeout 2s = on n'attend pas les machines mortes
-            nm.scan(hosts=network, arguments='-sn -T4 --host-timeout 2s')
-        except nmap.PortScannerError as e:
-            return Response(
-                {'detail': f'Erreur scanner : {str(e)}. nmap est-il installé ?'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-        except Exception as e:
-            return Response(
-                {'detail': f'Erreur inattendue : {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            network = IPv4Network(network_str, strict=False)
+        except ValueError as e:
+            return Response({'detail': f'Plage réseau invalide : {e}'}, status=status.HTTP_400_BAD_REQUEST)
 
-        created = []    # machines nouvellement ajoutées
-        skipped = []    # machines déjà en base
+        # Limite à /22 pour éviter les scans trop longs
+        if network.prefixlen < 22:
+            return Response({'detail': 'Plage réseau trop large (max /22).'}, status=status.HTTP_400_BAD_REQUEST)
 
-        for host in nm.all_hosts():
-            # Récupère le hostname — fallback sur l'IP si vide
-            hostname = nm[host].hostname() or f"machine-{host.replace('.', '-')}"
+        is_windows = platform.system() == 'Windows'
 
-            # Récupère l'adresse MAC si disponible (pas toujours accessible)
-            mac = None
-            if 'mac' in nm[host]['addresses']:
-                mac = nm[host]['addresses']['mac']
+        def ping(ip):
+            """Retourne True si l'hôte répond au ping."""
+            try:
+                if is_windows:
+                    cmd = ['ping', '-n', '1', '-w', '800', str(ip)]
+                else:
+                    cmd = ['ping', '-c', '1', '-W', '1', str(ip)]
+                r = subprocess.run(cmd, capture_output=True, timeout=3)
+                return r.returncode == 0
+            except Exception:
+                return False
 
-            # Vérification doublon : par MAC d'abord, puis par hostname
+        def resolve_hostname(ip):
+            try:
+                return socket.gethostbyaddr(str(ip))[0]
+            except Exception:
+                return f"machine-{str(ip).replace('.', '-')}"
+
+        def get_arp_table():
+            """Retourne un dict {ip: mac} depuis la table ARP locale."""
+            macs = {}
+            try:
+                enc = 'cp1252' if is_windows else 'utf-8'
+                r = subprocess.run(['arp', '-a'], capture_output=True, timeout=5)
+                output = r.stdout.decode(enc, errors='replace')
+                for line in output.splitlines():
+                    parts = line.split()
+                    if len(parts) < 2:
+                        continue
+                    if is_windows:
+                        # Windows : "192.168.1.1  aa-bb-cc-dd-ee-ff  dynamic"
+                        ip_part  = parts[0]
+                        mac_part = parts[1] if len(parts) > 1 else None
+                    else:
+                        # Linux : "? (192.168.1.1) at aa:bb:cc:dd:ee:ff [ether] on eth0"
+                        ip_part  = parts[1].strip('()')
+                        mac_part = parts[3] if len(parts) > 3 else None
+                    if mac_part and ('-' in mac_part or ':' in mac_part):
+                        macs[ip_part] = mac_part.upper().replace('-', ':')
+            except Exception:
+                pass
+            return macs
+
+        # Scan en parallèle (max 64 threads)
+        hosts_up = []
+        ips = [str(ip) for ip in network.hosts()]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=64) as ex:
+            results = ex.map(ping, ips)
+        for ip, alive in zip(ips, results):
+            if alive:
+                hosts_up.append(ip)
+
+        # Table ARP pour les MAC
+        arp = get_arp_table()
+
+        created, skipped = [], []
+
+        for host in hosts_up:
+            mac      = arp.get(host)
+            hostname = resolve_hostname(host)
+
+            # Doublon par MAC
             if mac and Equipment.objects.filter(serial_number=mac).exists():
-                skipped.append({
-                    'ip': host,
-                    'hostname': hostname,
-                    'reason': 'Déjà enregistrée (MAC connue)'
-                })
-                continue
-            
-            if Equipment.objects.filter(name=hostname, type='desktop').exists():
-                skipped.append({
-                    'ip': host,
-                    'hostname': hostname,
-                    'reason': 'Déjà enregistrée (hostname connu)'
-                })
+                skipped.append({'ip': host, 'hostname': hostname, 'reason': 'MAC déjà connue'})
                 continue
 
-            # Crée l'équipement en brouillon — MAC dans serial_number, IP dans location
-            equipment = Equipment.objects.create(
+            # Doublon par IP (location)
+            if Equipment.objects.filter(location=host).exists():
+                skipped.append({'ip': host, 'hostname': hostname, 'reason': 'IP déjà enregistrée'})
+                continue
+
+            eq = Equipment.objects.create(
                 name=hostname,
-                type='desktop',       # Windows → desktop par défaut
-                status='stock',       # brouillon — à compléter
-                location=host,        # IP dans le champ location
-                site='bobo',          # site par défaut BUMIGEB Bobo
-                serial_number=mac,
-                # brand, model, department — à compléter par l'admin
+                type='desktop',
+                status='stock',
+                location=host,
+                site='bobo',
+                serial_number=mac or None,
             )
-
-            created.append({
-                'id': equipment.id,
-                'ip': host,
-                'hostname': hostname,
-                'mac': mac,
-            })
+            created.append({'id': eq.id, 'ip': host, 'hostname': hostname, 'mac': mac})
 
         return Response({
             'summary': {
-                'scanned': network,
-                'hosts_found': len(nm.all_hosts()),
+                'scanned': network_str,
+                'hosts_found': len(hosts_up),
                 'created': len(created),
                 'skipped': len(skipped),
             },

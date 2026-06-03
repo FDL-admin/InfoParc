@@ -4,85 +4,153 @@ import AppLayout from '../../components/layout/AppLayout'
 import TopBar from '../../components/layout/TopBar'
 import api from '../../api/axios'
 
-
+const FONT = "'Inter', system-ui, sans-serif"
 
 const STATUS_MAP = {
-  open:        { bg: '#E6F1FB', color: '#185FA5', label: 'Ouvert' },
-  assigned:    { bg: '#EEEDFE', color: '#3C3489', label: 'Assigné' },
-  in_progress: { bg: '#FAEEDA', color: '#633806', label: 'En cours' },
-  waiting:     { bg: '#F1EFE8', color: '#5F5E5A', label: 'En attente' },
-  resolved:    { bg: '#EAF3DE', color: '#27500A', label: 'Résolu' },
-  closed:      { bg: '#F1EFE8', color: '#444441', label: 'Clôturé' },
+  open:        { bg: '#dbeafe', color: '#1e40af', label: 'Ouvert' },
+  assigned:    { bg: '#ede9fe', color: '#5b21b6', label: 'Assigné' },
+  in_progress: { bg: '#fef3c7', color: '#92400e', label: 'En cours' },
+  waiting:     { bg: '#f3f4f6', color: '#6b7280', label: 'En attente' },
+  resolved:    { bg: '#dcfce7', color: '#166534', label: 'Résolu' },
+  closed:      { bg: '#f3f4f6', color: '#374151', label: 'Clôturé' },
 }
 
 const PRIORITY_MAP = {
-  critical: { bg: '#FCEBEB', color: '#791F1F', label: 'Critique' },
-  high:     { bg: '#FAEEDA', color: '#633806', label: 'Haute' },
-  normal:   { bg: '#F1EFE8', color: '#5F5E5A', label: 'Normale' },
-  low:      { bg: '#E6F1FB', color: '#185FA5', label: 'Basse' },
+  critical: { bg: '#fee2e2', color: '#991b1b', label: 'Critique', dot: '#dc2626' },
+  high:     { bg: '#fef3c7', color: '#92400e', label: 'Haute',    dot: '#d97706' },
+  normal:   { bg: '#f3f4f6', color: '#6b7280', label: 'Normale',  dot: '#9ca3af' },
+  low:      { bg: '#e0f2fe', color: '#075985', label: 'Basse',    dot: '#38bdf8' },
 }
 
-function Badge({ value, map }) {
-  const s = map[value] ?? { bg: '#F1EFE8', color: '#444441', label: value }
+const CATEGORY_MAP = {
+  hardware: 'Panne matérielle',
+  software: 'Logiciel',
+  network:  'Réseau',
+  printer:  'Imprimante',
+  other:    'Autre',
+}
+
+const STATUS_FILTERS = [
+  { label: 'Tous',        value: '' },
+  { label: 'Ouvert',      value: 'open' },
+  { label: 'En cours',    value: 'in_progress' },
+  { label: 'En attente',  value: 'waiting' },
+  { label: 'Résolu',      value: 'resolved' },
+  { label: 'Clôturé',     value: 'closed' },
+]
+
+// ── Composants ────────────────────────────────────────────────
+function StatusBadge({ value }) {
+  const s = STATUS_MAP[value] ?? { bg: '#f3f4f6', color: '#6b7280', label: value }
   return (
     <span style={{
-      background: s.bg, color: s.color,
-      fontSize: '11px', padding: '2px 7px',
-      borderRadius: '4px', fontWeight: '500',
+      background: s.bg, color: s.color, fontSize: '11.5px',
+      padding: '3px 9px', borderRadius: '6px', fontWeight: '500',
+      fontFamily: FONT, whiteSpace: 'nowrap',
     }}>
       {s.label}
     </span>
   )
 }
 
-const FILTERS = [
-  { label: 'Tous', value: '' },
-  { label: 'Ouvert', value: 'open' },
-  { label: 'En cours', value: 'in_progress' },
-  { label: 'En attente', value: 'waiting' },
-  { label: 'Résolu', value: 'resolved' },
-  { label: 'Clôturé', value: 'closed' },
-]
+function PriorityBadge({ value }) {
+  const p = PRIORITY_MAP[value] ?? { dot: '#9ca3af', label: value, color: '#6b7280' }
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12.5px', color: p.color, fontFamily: FONT }}>
+      <span style={{ width: 7, height: 7, borderRadius: '50%', background: p.dot, flexShrink: 0, display: 'inline-block' }} />
+      {p.label}
+    </span>
+  )
+}
 
+function Pill({ label, active, activeColor, activeBg, onClick, children }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: '5px',
+        padding: '5px 11px', borderRadius: '7px', cursor: 'pointer',
+        fontSize: '13px', fontFamily: FONT, whiteSpace: 'nowrap',
+        border: active ? `1.5px solid ${activeColor ?? '#1B5E20'}` : '1px solid #e5e7eb',
+        background: active ? (activeBg ?? '#1B5E20') : hov ? '#f9fafb' : '#fff',
+        color: active ? (activeBg ? activeColor : '#fff') : '#374151',
+        fontWeight: active ? '500' : '400',
+        transition: 'all .12s',
+      }}
+    >
+      {children ?? label}
+    </button>
+  )
+}
+
+function PageBtn({ label, active, disabled, onClick }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button onClick={onClick} disabled={disabled}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{
+        minWidth: '32px', height: '32px', padding: '0 8px',
+        border: active ? '1.5px solid #1B5E20' : '1px solid #e5e7eb', borderRadius: '7px',
+        background: active ? '#1B5E20' : hov && !disabled ? '#f9fafb' : '#fff',
+        color: active ? '#fff' : disabled ? '#d1d5db' : '#374151',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        fontSize: '13px', fontFamily: FONT, transition: 'all .12s',
+      }}>{label}</button>
+  )
+}
+
+function buildPages(cur, total) {
+  const p = []
+  for (let i = 1; i <= total; i++) {
+    if (i === 1 || i === total || Math.abs(i - cur) <= 1) p.push(i)
+    else if (p[p.length - 1] !== '…') p.push('…')
+  }
+  return p
+}
+
+const thStyle = {
+  textAlign: 'left', padding: '11px 16px',
+  fontSize: '11px', color: '#9ca3af', fontWeight: '600',
+  borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap',
+  background: '#fafafa', letterSpacing: '0.07em',
+  textTransform: 'uppercase', fontFamily: FONT,
+}
+const tdStyle = {
+  padding: '12px 16px', borderBottom: '1px solid #f3f4f6',
+  fontFamily: FONT, verticalAlign: 'middle',
+}
+
+// ── Page ─────────────────────────────────────────────────────
 export default function TicketList() {
-  const [tickets, setTickets] = useState([])
-  const [count, setCount] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
+  const [tickets,      setTickets]      = useState([])
+  const [count,        setCount]        = useState(0)
+  const [loading,      setLoading]      = useState(true)
+  const [search,       setSearch]       = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [page, setPage] = useState(1)
   const [showArchived, setShowArchived] = useState(false)
+  const [page,         setPage]         = useState(1)
   const navigate = useNavigate()
-
   const PAGE_SIZE = 20
 
-  const fetchTickets = () => {
+  const fetch = () => {
     setLoading(true)
-    const params = new URLSearchParams()
-    if (search) params.append('search', search)
-    if (!showArchived && statusFilter) params.append('status', statusFilter)
-    params.append('archived', showArchived ? 'true' : 'false')
-    params.append('page', page)
-
-    api.get(`/tickets/?${params.toString()}`)
-      .then(res => {
-        setTickets(res.data.results ?? res.data)
-        setCount(res.data.count ?? 0)
-      })
+    const p = new URLSearchParams()
+    if (search)      p.append('search', search)
+    if (!showArchived && statusFilter) p.append('status', statusFilter)
+    p.append('archived', showArchived ? 'true' : 'false')
+    p.append('page', page)
+    api.get(`/tickets/?${p}`)
+      .then(r => { setTickets(r.data.results ?? r.data); setCount(r.data.count ?? 0) })
       .catch(console.error)
       .finally(() => setLoading(false))
   }
 
+  useEffect(() => { fetch() }, [statusFilter, page, showArchived])
   useEffect(() => {
-    fetchTickets()
-  }, [statusFilter, page, showArchived])
-
-  // Recherche avec délai pour ne pas spammer l'API
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setPage(1)
-      fetchTickets()
-    }, 400)
+    const t = setTimeout(() => { setPage(1); fetch() }, 380)
     return () => clearTimeout(t)
   }, [search])
 
@@ -91,17 +159,18 @@ export default function TicketList() {
   return (
     <AppLayout topbar={
       <TopBar
-        title={showArchived ? 'Archives tickets' : 'Tickets'}
+        title={showArchived ? 'Archives' : 'Tickets'}
         actions={
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               onClick={() => { setShowArchived(a => !a); setPage(1); setStatusFilter('') }}
               style={{
-                borderRadius: '6px', padding: '7px 14px',
-                fontSize: '12px', cursor: 'pointer',
-                border: showArchived ? '0.5px solid #888' : '0.5px solid #e0e0e0',
-                color: showArchived ? '#444' : '#666',
-                background: showArchived ? '#F1EFE8' : '#fff',
+                borderRadius: '7px', padding: '6px 14px', fontSize: '13px',
+                cursor: 'pointer', fontFamily: FONT,
+                border: showArchived ? '1px solid #374151' : '1px solid #e5e7eb',
+                color: showArchived ? '#111827' : '#6b7280',
+                background: showArchived ? '#f3f4f6' : '#fff',
+                transition: 'all .12s',
               }}
             >
               Archives
@@ -110,9 +179,9 @@ export default function TicketList() {
               <button
                 onClick={() => navigate('/tickets/new')}
                 style={{
-                  background: '#C2185B', color: '#fff', border: 'none',
-                  borderRadius: '6px', padding: '7px 14px',
-                  fontSize: '12px', cursor: 'pointer',
+                  background: '#1B5E20', color: '#fff', border: 'none',
+                  borderRadius: '7px', padding: '6px 16px',
+                  fontSize: '13px', cursor: 'pointer', fontFamily: FONT,
                 }}
               >
                 + Nouvelle DI
@@ -123,176 +192,148 @@ export default function TicketList() {
       />
     }>
 
-      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px', background: '#f8f9fa', minHeight: '100%' }}>
 
-        {/* Barre de recherche */}
+        {/* ── Toolbar ── */}
         <div style={{
-          display: 'flex', alignItems: 'center', gap: '8px',
-          background: '#fff', border: '0.5px solid #e0e0e0',
-          borderRadius: '6px', padding: '7px 12px',
+          background: '#fff', border: '1px solid #eaecf0', borderRadius: '12px',
+          padding: '14px 16px', display: 'flex', alignItems: 'center',
+          gap: '12px', flexWrap: 'wrap',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
         }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="#aaa" strokeWidth="2">
-            <circle cx="11" cy="11" r="8"/>
-            <path d="m21 21-4.35-4.35"/>
-          </svg>
-          <input
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1) }}
-            placeholder="Rechercher par titre, numéro..."
-            style={{
-              border: 'none', outline: 'none', fontSize: '13px',
-              color: '#333', flex: 1, background: 'transparent',
-            }}
-          />
+          {/* Recherche */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            border: '1px solid #e5e7eb', borderRadius: '8px',
+            padding: '6px 12px', width: '260px', flexShrink: 0,
+            background: '#fafafa',
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" style={{flexShrink:0}}>
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1) }}
+              placeholder="Titre, numéro, demandeur…"
+              style={{
+                border: 'none', outline: 'none', fontSize: '13px',
+                color: '#374151', background: 'transparent', width: '100%',
+                fontFamily: FONT,
+              }}
+            />
+            {search && (
+              <button onClick={() => setSearch('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: '16px', lineHeight: 1, padding: 0 }}>×</button>
+            )}
+          </div>
+
+          {!showArchived && (
+            <>
+              <div style={{ width: '1px', height: '28px', background: '#e5e7eb', flexShrink: 0 }} />
+              {/* Filtres statut */}
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {STATUS_FILTERS.map(f => {
+                  const sm = STATUS_MAP[f.value]
+                  return (
+                    <Pill
+                      key={f.value}
+                      label={f.label}
+                      active={statusFilter === f.value}
+                      activeColor={sm?.color ?? '#1B5E20'}
+                      activeBg={sm?.bg ?? '#1B5E20'}
+                      onClick={() => { setStatusFilter(f.value); setPage(1) }}
+                    />
+                  )
+                })}
+              </div>
+            </>
+          )}
+
+          <span style={{ marginLeft: 'auto', fontSize: '13px', color: '#9ca3af', fontFamily: FONT, whiteSpace: 'nowrap' }}>
+            {loading ? '…' : `${count} ticket${count > 1 ? 's' : ''}`}
+          </span>
         </div>
 
-        {/* Filtres statut — masqués en mode archives */}
-        {!showArchived && (
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            {FILTERS.map(f => (
-              <button
-                key={f.value}
-                onClick={() => { setStatusFilter(f.value); setPage(1) }}
-                style={{
-                  padding: '5px 12px', borderRadius: '20px', fontSize: '12px',
-                  border: '0.5px solid',
-                  borderColor: statusFilter === f.value ? '#1B5E20' : '#e0e0e0',
-                  background: statusFilter === f.value ? '#1B5E20' : '#fff',
-                  color: statusFilter === f.value ? '#fff' : '#666',
-                  cursor: 'pointer', transition: 'all .15s',
-                }}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Tableau */}
+        {/* ── Table card ── */}
         <div style={{
-          background: '#fff', border: '0.5px solid #e0e0e0',
-          borderRadius: '8px', overflow: 'hidden',
+          background: '#fff', border: '1px solid #eaecf0',
+          borderRadius: '12px', overflow: 'hidden',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
         }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#fafafa' }}>
+              <tr>
                 {['Numéro', 'Titre', 'Catégorie', 'Priorité', 'Statut', 'Demandeur', 'Créé le'].map(h => (
-                  <th key={h} style={{
-                    textAlign: 'left', padding: '10px 12px',
-                    color: '#888', fontWeight: '400',
-                    borderBottom: '0.5px solid #eee', whiteSpace: 'nowrap',
-                  }}>{h}</th>
+                  <th key={h} style={thStyle}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} style={{ padding: '20px', textAlign: 'center', color: '#aaa' }}>
-                  Chargement...
-                </td></tr>
+                <tr><td colSpan={7} style={{ ...tdStyle, textAlign: 'center', color: '#d1d5db', padding: '40px', fontStyle: 'italic' }}>Chargement…</td></tr>
               ) : tickets.length === 0 ? (
-                <tr><td colSpan={7} style={{ padding: '20px', textAlign: 'center', color: '#aaa' }}>
-                  Aucun ticket trouvé
-                </td></tr>
-              ) : (
-                tickets.map(t => (
-                  <tr key={t.id} style={{ cursor: 'pointer' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#fafafa'}
-                    onMouseLeave={e => e.currentTarget.style.background = ''}
-                    onClick={() => navigate(`/tickets/${t.id}`)}
-
-                  >
-                    <td style={{ padding: '10px 12px', borderBottom: '0.5px solid #f5f5f5', color: '#666' }}>
-                      {t.ticket_number}
-                    </td>
-                    <td style={{ padding: '10px 12px', borderBottom: '0.5px solid #f5f5f5', maxWidth: '200px' }}>
-                      {t.title.length > 35 ? t.title.slice(0, 35) + '…' : t.title}
-                    </td>
-                    <td style={{ padding: '10px 12px', borderBottom: '0.5px solid #f5f5f5', color: '#666' }}>
-                      {t.category}
-                    </td>
-                    <td style={{ padding: '10px 12px', borderBottom: '0.5px solid #f5f5f5' }}>
-                      <Badge value={t.priority} map={PRIORITY_MAP} />
-                    </td>
-                    <td style={{ padding: '10px 12px', borderBottom: '0.5px solid #f5f5f5' }}>
-                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                        <Badge value={t.status} map={STATUS_MAP} />
-                        {showArchived && (
-                          <span style={{
-                            background: '#F1EFE8', color: '#5F5E5A',
-                            fontSize: '11px', padding: '2px 7px',
-                            borderRadius: '4px', fontWeight: '500',
-                          }}>
-                            Archivé
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td style={{ padding: '10px 12px', borderBottom: '0.5px solid #f5f5f5', color: '#666' }}>
-                      {t.requester_name}
-                    </td>
-                    <td style={{ padding: '10px 12px', borderBottom: '0.5px solid #f5f5f5', color: '#888', whiteSpace: 'nowrap' }}>
-                      {new Date(t.created_at).toLocaleDateString('fr-FR')}
-                    </td>
-                  </tr>
-                ))
-              )}
+                <tr><td colSpan={7} style={{ ...tdStyle, textAlign: 'center', color: '#d1d5db', padding: '40px', fontStyle: 'italic' }}>Aucun ticket trouvé</td></tr>
+              ) : tickets.map(t => (
+                <TicketRow key={t.id} t={t} tdStyle={tdStyle} showArchived={showArchived} onClick={() => navigate(`/tickets/${t.id}`)} />
+              ))}
             </tbody>
           </table>
         </div>
 
-        {/* Pagination */}
+        {/* ── Pagination ── */}
         {totalPages > 1 && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '4px' }}>
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-              style={{
-                padding: '5px 10px', border: '0.5px solid #e0e0e0',
-                borderRadius: '4px 0 0 4px', background: '#fff',
-                cursor: page === 1 ? 'not-allowed' : 'pointer',
-                color: page === 1 ? '#ccc' : '#666', fontSize: '12px',
-              }}
-            >←</button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .filter(n => n === 1 || n === totalPages || Math.abs(n - page) <= 1)
-              .map((n, idx, arr) => (
-                <>
-                  {idx > 0 && arr[idx - 1] !== n - 1 && (
-                    <span key={`dots-${n}`} style={{ padding: '5px 8px', fontSize: '12px', color: '#aaa' }}>…</span>
-                  )}
-                  <button
-                    key={n}
-                    onClick={() => setPage(n)}
-                    style={{
-                      padding: '5px 10px', border: '0.5px solid #e0e0e0',
-                      background: page === n ? '#1B5E20' : '#fff',
-                      color: page === n ? '#fff' : '#666',
-                      cursor: 'pointer', fontSize: '12px',
-                    }}
-                  >{n}</button>
-                </>
-              ))
-            }
-            <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              style={{
-                padding: '5px 10px', border: '0.5px solid #e0e0e0',
-                borderRadius: '0 4px 4px 0', background: '#fff',
-                cursor: page === totalPages ? 'not-allowed' : 'pointer',
-                color: page === totalPages ? '#ccc' : '#666', fontSize: '12px',
-              }}
-            >→</button>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '4px' }}>
+            <PageBtn label="←" disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))} />
+            {buildPages(page, totalPages).map((n, i) =>
+              n === '…'
+                ? <span key={`d${i}`} style={{ padding: '0 4px', color: '#9ca3af', fontSize: '13px' }}>…</span>
+                : <PageBtn key={n} label={n} active={page === n} onClick={() => setPage(n)} />
+            )}
+            <PageBtn label="→" disabled={page === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} />
           </div>
         )}
 
-        <div style={{ fontSize: '11px', color: '#aaa', textAlign: 'right' }}>
-          {count} ticket{count > 1 ? 's' : ''} au total
-        </div>
-
       </div>
     </AppLayout>
+  )
+}
+
+function TicketRow({ t, tdStyle, showArchived, onClick }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <tr
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{ cursor: 'pointer', background: hov ? '#fafafa' : 'transparent', transition: 'background .1s' }}
+    >
+      <td style={{ ...tdStyle, color: '#9ca3af', fontFamily: 'ui-monospace, monospace', fontSize: '12px', letterSpacing: '0.04em' }}>
+        {t.ticket_number}
+      </td>
+      <td style={{ ...tdStyle, fontWeight: '500', color: '#111827', fontSize: '13.5px', maxWidth: '240px' }}>
+        <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {t.title}
+        </span>
+      </td>
+      <td style={{ ...tdStyle, fontSize: '13px', color: '#6b7280' }}>
+        {CATEGORY_MAP[t.category] ?? t.category}
+      </td>
+      <td style={tdStyle}>
+        <PriorityBadge value={t.priority} />
+      </td>
+      <td style={tdStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <StatusBadge value={t.status} />
+          {showArchived && (
+            <span style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '5px', background: '#f3f4f6', color: '#6b7280', fontFamily: FONT }}>Archivé</span>
+          )}
+        </div>
+      </td>
+      <td style={{ ...tdStyle, fontSize: '13px', color: '#374151', fontWeight: '500' }}>
+        {t.requester_name}
+      </td>
+      <td style={{ ...tdStyle, fontSize: '12.5px', color: '#9ca3af', whiteSpace: 'nowrap' }}>
+        {new Date(t.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+      </td>
+    </tr>
   )
 }
